@@ -1,0 +1,12 @@
+export { DashboardHeader } from './DashboardHeader';
+export { StatCard } from './StatCard';
+export { SectionCard } from './SectionCard';
+export { ModuleButton } from './ModuleButton';
+export { BottomNavBar, type StudentTab } from './BottomNavBar';
+export { StudentTabBar } from './StudentTabBar';
+export { GradientBackground } from './GradientBackground';
+export { LoadingSkeleton } from './LoadingSkeleton';
+export { CategorySelector, type HomeSegment } from './CategorySelector';
+export { HomeSummaryCard } from './HomeSummaryCard';
+export { HomeListCard, type HomeListItem } from './HomeListCard';
+export { HeroMetricsSection } from './HeroMetricsSection';
