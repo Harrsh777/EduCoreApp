@@ -16,17 +16,18 @@ const { colors, spacing: s, cardRadius } = teacherDashboardTheme;
 
 export default function TeacherAcademicsScreen() {
   const router = useRouter();
-  const { path, hasPermission, isClassTeacher, staffMenuModules } = useTeacher();
+  const { path, hasPermission, isClassTeacher, hasTeachingAssignments, staffMenuModules } = useTeacher();
 
   const mergedSections = useMemo(
     () =>
       getMergedTeacherMenu({
         staffMenuModules,
         isClassTeacher,
+        hasTeachingAssignments,
         hasPermission,
         path,
       }),
-    [staffMenuModules, isClassTeacher, hasPermission, path]
+    [staffMenuModules, isClassTeacher, hasTeachingAssignments, hasPermission, path]
   );
 
   const handleModule = (route: string) => {

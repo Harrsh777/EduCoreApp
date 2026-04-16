@@ -1,5 +1,5 @@
 /**
- * Leave: dashboard summary, staff/student requests, types. APIs: GET /api/leave/dashboard-summary, requests, student-requests, types.
+ * Leave: dashboard summary, staff/student requests, types.
  */
 
 import { useRouter } from 'expo-router';

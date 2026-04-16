@@ -229,7 +229,27 @@ export default function StudentApplyLeaveScreen() {
   const studentId   = student?.id ?? '';
   const showToast   = useToastStore((s) => s.show);
   const queryClient = useQueryClient();
-
+  const handleSubmit = () => {
+    if (!leaveTypeId || !startDate || !endDate || !reason) {
+      Alert.alert("Incomplete Form", "Please fill all fields before submitting.");
+      return;
+    }
+  
+    if (new Date(endDate) < new Date(startDate)) {
+      Alert.alert("Invalid Dates", "End date cannot be before start date.");
+      return;
+    }
+  
+    if (selectedType?.max_days && totalDays > selectedType.max_days) {
+      Alert.alert(
+        "Limit Exceeded",
+        `Maximum ${selectedType.max_days} days allowed for this leave type.`
+      );
+      return;
+    }
+  
+    mutation.mutate();
+  };
   const [leaveTypeId, setLeaveTypeId] = useState('');
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
@@ -250,32 +270,52 @@ export default function StudentApplyLeaveScreen() {
   const selectedType = leaveTypes.find((t: any) => t.id === leaveTypeId);
 
   const mutation = useMutation({
-    mutationFn: () => leaveService.postStudentLeaveRequest(schoolCode, {
-      school_code: schoolCode, student_id: studentId,
-      leave_type_id: leaveTypeId, leave_title: selectedType?.name,
-      leave_start_date: startDate, leave_end_date: endDate, reason,
-    }),
+    mutationFn: async () => {
+      const response = await leaveService.postStudentLeaveRequest(
+        schoolCode,
+        {
+          school_code: schoolCode,
+          student_id: studentId,
+          leave_type_id: leaveTypeId,
+          leave_title: selectedType?.name,
+          leave_start_date: startDate,
+          leave_end_date: endDate,
+          reason,
+        }
+      );
+
+      const status = response?.status ?? 0;
+      if (!response || status < 200 || status >= 300) {
+        throw new Error(response?.data?.message ?? response?.data?.error ?? 'Request failed');
+      }
+
+      return response;
+    },
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leave', 'student-requests', schoolCode, studentId] });
+      queryClient.invalidateQueries({
+        queryKey: ['leave', 'student-requests', schoolCode, studentId],
+      });
+      showToast('Leave request sent successfully.', 'success');
       Alert.alert(
-        'Leave request sent',
-        'Your leave has been sent to the office. You will be notified once it is processed.',
+        'Request Sent ✅',
+        'Your leave request has been successfully sent.',
         [{ text: 'OK', onPress: () => router.back() }]
       );
     },
-    onError: (err: any) => {
-      const message = err?.response?.data?.message ?? err?.response?.data?.error ?? err?.message ?? 'Failed to submit leave request. Please try again.';
-      Alert.alert('Error', message, [{ text: 'OK' }]);
+
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Something went wrong. Please try again.';
+      showToast(message, 'error');
+      Alert.alert('Request Failed ❌', message);
     },
   });
 
-  const handleSubmit = () => {
-    if (!leaveTypeId || !startDate || !endDate || !reason) { showToast('Please complete all fields', 'error'); return; }
-    if (selectedType?.max_days && totalDays > selectedType.max_days) {
-      showToast(`Maximum ${selectedType.max_days} days allowed`, 'error'); return;
-    }
-    mutation.mutate();
-  };
 
   const canSubmit = !!(leaveTypeId && startDate && endDate && reason) && !mutation.isPending;
 
@@ -342,9 +382,9 @@ export default function StudentApplyLeaveScreen() {
           style={s.reasonInput}
         />
 
-        {/* Submit */}
-        <Pressable onPress={handleSubmit} disabled={!canSubmit}
-          style={({ pressed }) => [s.submitBtn, !canSubmit && s.submitBtnDisabled, pressed && canSubmit && {opacity:0.85}]}>
+        {/* Submit — always pressable so validation/success/error feedback always runs */}
+        <Pressable onPress={handleSubmit}
+          style={({ pressed }) => [s.submitBtn, !canSubmit && s.submitBtnDisabled, pressed && canSubmit && { opacity: 0.85 }]}>
           {mutation.isPending ? (
             <ActivityIndicator color="#fff" />
           ) : (

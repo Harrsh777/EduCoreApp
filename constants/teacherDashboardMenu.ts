@@ -1,6 +1,6 @@
 /**
- * Teacher dashboard menu: sections and modules. Matches Teacher Portal Dashboard Menu.
- * Merged menu = filtered teacherBaseItems (by class teacher + permission) + dynamic from GET /api/staff/[id]/menu (deduped).
+ * Teacher dashboard menu: sections and modules. Aligned with staff portal module index (web paths = labels).
+ * Merged menu = filtered base items + dynamic from GET /api/staff/[id]/menu (deduped).
  */
 
 import type Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,12 +11,15 @@ export type TeacherModuleItem = {
   label: string;
   path: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /** If set, user must have this RBAC permission key */
   permission?: string | null;
   permissionAny?: string[];
+  /** Class teacher only (GET /api/classes/teacher non-empty). */
   requiresClassTeacher?: boolean;
+  /** Marks entry / scholastic flows: class teacher OR teaching assignments. */
+  requiresMarksAccess?: boolean;
 };
 
-/** Flattened menu item with full route for navigation (path suffix for base, full URL for dynamic). */
 export type TeacherMenuItem = {
   id: string;
   label: string;
@@ -30,101 +33,167 @@ export type TeacherSectionConfig = {
   modules: TeacherModuleItem[];
 };
 
+/** Order matches staff portal menu index (Teaching column = visible to all teaching staff unless noted). */
 export const TEACHER_DASHBOARD_SECTIONS: TeacherSectionConfig[] = [
   {
     id: 'core',
     title: 'Core',
     modules: [
-      { id: 'home', label: 'Home', path: '', icon: 'home', requiresClassTeacher: false },
-      { id: 'academics', label: 'Academics', path: '', icon: 'school', requiresClassTeacher: false },
-      { id: 'mark-attendance', label: 'Mark Attendance', path: 'attendance', icon: 'calendar', requiresClassTeacher: false },
-      { id: 'my-attendance', label: 'My Attendance', path: 'attendance-staff', icon: 'calendar-outline', requiresClassTeacher: false },
-      { id: 'marks-entry', label: 'Marks Entry', path: 'marks', icon: 'document-text', requiresClassTeacher: true },
-      { id: 'examinations', label: 'Examinations', path: 'examinations', icon: 'document-text', permissionAny: ['view_exams', 'manage_exams'], requiresClassTeacher: false },
-      { id: 'my-class', label: 'My Class', path: 'my-class', icon: 'people', requiresClassTeacher: true },
-      { id: 'classes', label: 'Classes', path: 'classes', icon: 'book', permission: 'view_classes', requiresClassTeacher: false },
-      { id: 'calendar', label: 'Academic Calendar', path: 'calendar', icon: 'calendar', permission: 'view_events', requiresClassTeacher: false },
-      { id: 'diary', label: 'Digital Diary', path: 'homework', icon: 'bookmark', permission: 'view_homework', requiresClassTeacher: false },
-      { id: 'copy-checking', label: 'Copy Checking', path: 'copy-checking', icon: 'document-text-outline', requiresClassTeacher: false },
+      { id: 'home', label: 'Home', path: '', icon: 'home' },
+      { id: 'academics', label: 'Academics', path: '', icon: 'school' },
+      {
+        id: 'mark-attendance',
+        label: 'Mark Attendance',
+        path: 'attendance',
+        icon: 'calendar',
+        requiresClassTeacher: true,
+      },
+      { id: 'my-attendance', label: 'My Attendance', path: 'attendance-staff', icon: 'calendar-outline' },
+      { id: 'my-timetable', label: 'My Timetable', path: 'my-timetable', icon: 'time-outline' },
+      {
+        id: 'marks-entry',
+        label: 'Marks Entry',
+        path: 'marks',
+        icon: 'document-text',
+        requiresMarksAccess: true,
+      },
+      {
+        id: 'non-scholastic-marks',
+        label: 'Non-Scholastic Marks',
+        path: 'non-scholastic-marks',
+        icon: 'ribbon-outline',
+        requiresClassTeacher: true,
+      },
+      {
+        id: 'examinations',
+        label: 'Examinations',
+        path: 'examinations',
+        icon: 'school-outline',
+      },
+      {
+        id: 'my-class',
+        label: 'My Class',
+        path: 'my-class',
+        icon: 'people',
+        requiresClassTeacher: true,
+      },
+      { id: 'classes', label: 'Classes', path: 'classes', icon: 'book' },
+      {
+        id: 'students',
+        label: 'Student Management',
+        path: 'students',
+        icon: 'people-outline',
+      },
+      {
+        id: 'calendar',
+        label: 'Academic Calendar',
+        path: 'calendar',
+        icon: 'calendar-number-outline',
+      },
+      { id: 'diary', label: 'Digital Diary', path: 'homework', icon: 'bookmark' },
+      {
+        id: 'copy-checking',
+        label: 'Copy Checking',
+        path: 'copy-checking',
+        icon: 'document-text-outline',
+      },
     ],
   },
   {
     id: 'leave-requests',
-    title: 'Leave & Requests',
+    title: 'Leave & requests',
     modules: [
-      { id: 'apply-leave', label: 'Apply for Leave', path: 'apply-leave', icon: 'calendar-outline', requiresClassTeacher: false },
-      { id: 'my-leaves', label: 'My Leaves', path: 'my-leaves', icon: 'calendar', requiresClassTeacher: false },
-      { id: 'student-leave-approvals', label: 'Student Leave Approvals', path: 'student-leave-approvals', icon: 'calendar-outline', requiresClassTeacher: true },
+      { id: 'apply-leave', label: 'Apply for Leave', path: 'apply-leave', icon: 'calendar-outline' },
+      { id: 'my-leaves', label: 'My Leaves', path: 'my-leaves', icon: 'calendar' },
+      {
+        id: 'student-leave-approvals',
+        label: 'Student Leave Approvals',
+        path: 'student-leave-approvals',
+        icon: 'checkmark-done-outline',
+        requiresClassTeacher: true,
+      },
     ],
   },
   {
     id: 'information',
     title: 'Information',
     modules: [
-      { id: 'students', label: 'Student Management', path: 'students', icon: 'school', permission: 'view_students', requiresClassTeacher: false },
-      { id: 'library', label: 'Library', path: 'library', icon: 'library', permission: 'view_library', requiresClassTeacher: false },
-      { id: 'certificates', label: 'Certificate Management', path: 'certificates', icon: 'ribbon', permission: 'view_certificates', requiresClassTeacher: false },
-      { id: 'gallery', label: 'Gallery', path: 'gallery', icon: 'images', requiresClassTeacher: false },
-      { id: 'staff-directory', label: 'Staff Information', path: 'staff-management/directory', icon: 'people', permission: 'view_staff', requiresClassTeacher: false },
-      { id: 'communication', label: 'Communication', path: 'communication', icon: 'chatbubbles', requiresClassTeacher: false },
-      { id: 'front-office', label: 'Front Office', path: 'gate-pass', icon: 'business', permissionAny: ['view_gate_pass', 'manage_gate_pass'], requiresClassTeacher: false },
+      { id: 'library', label: 'Library', path: 'library', icon: 'library' },
+      {
+        id: 'certificates',
+        label: 'Certificate Management',
+        path: 'certificates',
+        icon: 'ribbon',
+      },
+      { id: 'gallery', label: 'Gallery', path: 'gallery', icon: 'images' },
+      {
+        id: 'staff-directory',
+        label: 'Staff Information',
+        path: 'staff-management/directory',
+        icon: 'id-card-outline',
+      },
+      { id: 'communication', label: 'Communication', path: 'communication', icon: 'chatbubbles' },
     ],
   },
   {
     id: 'finance',
     title: 'Finance',
     modules: [
-      { id: 'fee-management', label: 'Fee Management', path: 'fees', icon: 'cash', permissionAny: ['view_fees', 'manage_fees'], requiresClassTeacher: false },
-    ],
-  },
-  {
-    id: 'additional',
-    title: 'Additional Modules',
-    modules: [
-      { id: 'fees', label: 'Fees', path: 'fees', icon: 'cash', permissionAny: ['view_fees', 'manage_fees'], requiresClassTeacher: false },
-      { id: 'gate-pass', label: 'Gate pass', path: 'gate-pass', icon: 'open', permissionAny: ['view_gate_pass', 'manage_gate_pass'], requiresClassTeacher: false },
+      {
+        id: 'fee-management',
+        label: 'Fee Management',
+        path: 'fees',
+        icon: 'cash',
+        permissionAny: ['view_fees', 'manage_fees'],
+      },
     ],
   },
   {
     id: 'account',
     title: 'Account',
     modules: [
-      { id: 'institute-info', label: 'Institute Info', path: 'institute-info', icon: 'business', requiresClassTeacher: false },
-      { id: 'settings', label: 'Settings', path: 'settings', icon: 'settings', requiresClassTeacher: false },
-      { id: 'change-password', label: 'Change Password', path: 'change-password', icon: 'key', requiresClassTeacher: false },
+      { id: 'institute-info', label: 'Institute Info', path: 'institute-info', icon: 'business' },
+      { id: 'settings', label: 'Settings', path: 'settings', icon: 'settings' },
+      { id: 'change-password', label: 'Change Password', path: 'change-password', icon: 'key' },
     ],
   },
 ];
 
-/** Base module ids used for deduplication when merging dynamic menu from API. */
 const BASE_MODULE_IDS = new Set(
   TEACHER_DASHBOARD_SECTIONS.flatMap((s) => s.modules.map((m) => m.id))
 );
 
-/**
- * Build merged menu: filtered teacherBaseItems (by class teacher + permission) + dynamic from staff menu API (deduped).
- * Doc: Final sidebar = filtered teacherBaseItems + dynamicMenuItems (from API) + filtered dashboardMenuItems.
- */
+function moduleVisible(
+  m: TeacherModuleItem,
+  isClassTeacher: boolean,
+  hasTeachingAssignments: boolean,
+  hasPermission: (key: string) => boolean
+): boolean {
+  if (m.path === '' && (m.id === 'home' || m.id === 'academics')) return false;
+  if (m.requiresClassTeacher && !isClassTeacher) return false;
+  if (m.requiresMarksAccess && !isClassTeacher && !hasTeachingAssignments) return false;
+  if (m.permissionAny?.length) {
+    if (!m.permissionAny.some((p) => hasPermission(p))) return false;
+  } else if (m.permission && !hasPermission(m.permission)) return false;
+  return true;
+}
+
 export function getMergedTeacherMenu(options: {
   staffMenuModules: StaffMenuModule[];
   isClassTeacher: boolean;
+  hasTeachingAssignments: boolean;
   hasPermission: (key: string) => boolean;
   path: (suffix: string) => string;
 }): { sectionId: string; sectionTitle: string; items: TeacherMenuItem[] }[] {
-  const { staffMenuModules, isClassTeacher, hasPermission, path } = options;
+  const { staffMenuModules, isClassTeacher, hasTeachingAssignments, hasPermission, path } = options;
   const baseRoutes = new Set<string>();
 
   const sections: { sectionId: string; sectionTitle: string; items: TeacherMenuItem[] }[] = [];
 
   for (const section of TEACHER_DASHBOARD_SECTIONS) {
-    const visible = section.modules.filter((m) => {
-      if (m.path === '' && (m.id === 'home' || m.id === 'academics')) return false;
-      if (m.requiresClassTeacher && !isClassTeacher) return false;
-      if (m.permissionAny?.length) {
-        if (!m.permissionAny.some((p) => hasPermission(p))) return false;
-      } else if (m.permission && !hasPermission(m.permission)) return false;
-      return true;
-    });
+    const visible = section.modules.filter((m) =>
+      moduleVisible(m, isClassTeacher, hasTeachingAssignments, hasPermission)
+    );
     if (visible.length === 0) continue;
     const items: TeacherMenuItem[] = visible.map((m) => {
       const route = path(m.path);

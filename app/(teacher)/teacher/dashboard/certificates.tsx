@@ -28,8 +28,16 @@ export default function TeacherCertificatesScreen() {
   const [formFields, setFormFields] = useState<Record<string, string>>({});
 
   const { data: classesData } = useQuery({
-    queryKey: ['teacher', 'classes', schoolCode, teacherId],
-    queryFn: () => teacherService.getClasses({ school_code: schoolCode, teacher_id: teacherId }).then((r) => (r as { data?: unknown[] })?.data ?? []),
+    queryKey: ['teacher', 'classes', schoolCode, teacherId, teacher?.staff_id],
+    queryFn: () =>
+      teacherService
+        .getClasses({
+          school_code: schoolCode,
+          teacher_id: teacherId,
+          staff_id: teacher?.staff_id,
+          array: true,
+        })
+        .then((r) => (r as { data?: unknown[] })?.data ?? []),
     enabled: Boolean(schoolCode && teacherId),
   });
   const { data: studentsData } = useQuery({

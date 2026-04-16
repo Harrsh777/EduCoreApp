@@ -1,6 +1,5 @@
 /**
- * Report Card module: Generate Report Card, Report Card Dashboard, Customize Template.
- * Submodule of Examinations (manage_exams). Data from Supabase when USE_SUPABASE_DASHBOARD.
+ * Certificate Management: templates, create, classwise, manage.
  */
 
 import { useRouter } from 'expo-router';
@@ -12,7 +11,7 @@ import { textStyles } from '@/theme/typography';
 
 const INDIGO = '#4F46E5';
 
-export default function ReportCardScreen() {
+export default function CertificatesScreen() {
   const router = useRouter();
   const { schoolCode } = useSchoolCode();
 
@@ -24,13 +23,11 @@ export default function ReportCardScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()} accessibilityLabel="Back">
           <Text style={styles.backText}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>Report Card</Text>
+        <Text style={styles.title}>Certificates</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <SectionHeader title="Report Card" />
-        <Text style={styles.hint}>
-          Generate Report Card, Report Card Dashboard, Customize Template. Use the same APIs and Supabase data as Examinations and Marks.
-        </Text>
+        <SectionHeader title="Certificate management" />
+        <Text style={styles.hint}>Templates, create, classwise generation and manage. Use the web app for full certificate flows.</Text>
       </ScrollView>
     </View>
   );
@@ -43,14 +40,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    backgroundColor: '#fff',
+    minHeight: 56,
   },
-  backBtn: { marginRight: spacing[3], padding: spacing[2], minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  backBtn: { padding: spacing[2], marginRight: spacing[2], minHeight: 44, justifyContent: 'center' },
   backText: { fontSize: 16, color: INDIGO, fontWeight: '600' },
-  title: { ...textStyles.h4, color: '#111827' },
+  title: { ...textStyles.h4, color: '#111827', flex: 1 },
   scroll: { flex: 1 },
   content: { padding: spacing[6], paddingBottom: spacing[12] },
-  hint: { ...textStyles.bodySm, color: '#6B7280', marginTop: spacing[2] },
+  hint: { ...textStyles.bodySm, color: '#6B7280' },
 });

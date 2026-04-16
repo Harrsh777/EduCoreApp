@@ -30,14 +30,19 @@ export function resetStudentPassword(body: {
   return api.post('/api/students/reset-password', body);
 }
 
-/** POST /api/staff/change-password (teacher/staff change own password) */
+/** POST /api/staff/change-password?school_code= */
 export function changeStaffPassword(body: {
   school_code: string;
   staff_id: string;
   current_password: string;
   new_password: string;
 }) {
-  return api.post('/api/staff/change-password', body);
+  const { school_code, staff_id, current_password, new_password } = body;
+  return api.post(
+    '/api/staff/change-password',
+    { staff_id, current_password, new_password },
+    { params: { school_code } }
+  );
 }
 
 /** POST /api/students/change-password — student change own (current_password, new_password). Same as web. */

@@ -28,9 +28,17 @@ export function getDashboardStats(school_code: string) {
 }
 
 /** GET /api/students */
-export function getStudents(school_code: string, params?: { class?: string; section?: string; academic_year?: string; search?: string }) {
+export function getStudents(
+  school_code: string,
+  params?: { class?: string; section?: string; academic_year?: string; search?: string; status?: string }
+) {
   if (env.USE_SUPABASE_DASHBOARD) return getStudentsFromSupabase(school_code, params);
   return api.get('/api/students', { params: withSchool(params ?? {}, school_code) });
+}
+
+/** GET /api/classes/academic-years?school_code= — diary / class pickers (staff dashboard). */
+export function getAcademicYears(school_code: string) {
+  return api.get('/api/classes/academic-years', { params: { school_code } });
 }
 
 /** Get single class by exact match (school_code, class, section, academic_year). Use when USE_SUPABASE_DASHBOARD. */
@@ -53,13 +61,13 @@ export function getStudentByAdmissionNo(school_code: string, admission_no: strin
   });
 }
 
-/** Get staff by id (e.g. class_teacher_id from class record). */
+/** Get staff by id (e.g. class_teacher_id from class record). REST: GET /api/staff/:id */
 export function getStaffById(school_code: string, staff_id: string) {
   if (env.USE_SUPABASE_DASHBOARD) return getStaffByIdFromSupabase(school_code, staff_id).then((r) => ({ data: r.data }));
-  return api.get('/api/staff', { params: { school_code } }).then((res) => {
-    const list = (res?.data as { data?: { id?: string }[] })?.data ?? [];
-    const found = Array.isArray(list) && list.find((s) => String(s.id) === String(staff_id));
-    return { data: found ?? null };
+  return api.get(`/api/staff/${staff_id}`, { params: { school_code } }).then((res) => {
+    const body = res.data as { data?: unknown } | null | undefined;
+    const staff = body != null && typeof body === 'object' && 'data' in body && body.data != null ? body.data : body;
+    return { data: staff };
   });
 }
 
@@ -203,6 +211,7 @@ export function importStudents(school_code: string, body: FormData | Record<stri
 export const schoolService = {
   getDashboardStats,
   getStudents,
+  getAcademicYears,
   getStudent,
   getStudentByAdmissionNo,
   createStudent,

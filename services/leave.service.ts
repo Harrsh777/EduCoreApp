@@ -33,7 +33,11 @@ export function getStudentLeaveRequestsClassTeacher(school_code: string, staff_i
 }
 
 /** PATCH /api/leave/student-requests/[id]/class-teacher-approval */
-export function patchStudentLeaveApproval(school_code: string, requestId: string, body: { status: string }) {
+export function patchStudentLeaveApproval(
+  school_code: string,
+  requestId: string,
+  body: { status: string; remarks?: string }
+) {
   return api.patch(`/api/leave/student-requests/${requestId}/class-teacher-approval`, body, { params: { school_code } });
 }
 

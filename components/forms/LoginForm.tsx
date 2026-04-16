@@ -17,7 +17,8 @@ import { spacing } from '@/theme/spacing';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, type ReactNode } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ReactNode } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 function getDashboardPath(role: NonNullable<Role>, school_code?: string | null): string {
   if (role === 'admin' && school_code) return `/dashboard/${encodeURIComponent(school_code)}`;
@@ -42,8 +43,38 @@ type LoginFormProps = {
 };
 
 function getTokenFromResponse(data: unknown): string | undefined {
-  const d = data as { session_token?: string; token?: string };
-  return d.session_token ?? d.token;
+  const pick = (o: Record<string, unknown>): string | undefined => {
+    const a =
+      o.session_token ??
+      o.token ??
+      o.accessToken ??
+      o.access_token ??
+      o.jwt ??
+      o.authToken ??
+      o.auth_token ??
+      o.sessionToken;
+    return typeof a === 'string' && a.length > 0 ? a : undefined;
+  };
+  if (!data || typeof data !== 'object') return undefined;
+  const d = data as Record<string, unknown>;
+  const direct = pick(d);
+  if (direct) return direct;
+  const inner = d.data;
+  if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+    return pick(inner as Record<string, unknown>);
+  }
+  return undefined;
+}
+
+/** Flatten `{ data: { token, teacher } }` style bodies for profile/session fields */
+function getSessionPayloadRecord(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== 'object') return {};
+  const d = data as Record<string, unknown>;
+  const inner = d.data;
+  if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+    return { ...d, ...(inner as Record<string, unknown>) };
+  }
+  return d;
 }
 
 const ALLOWED_ROLES: LoginFormRole[] = ['admin', 'teacher', 'student', 'accountant'];
@@ -57,6 +88,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
   const [staffId, setStaffId] = useState('');
   const [admissionNo, setAdmissionNo] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
   const useSupabase = authService.useSupabaseAuth;
@@ -74,6 +106,10 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
           if (role === 'admin') result = await supabaseTableAuthService.adminLogin(code, pwd);
           else if (role === 'teacher') result = await supabaseTableAuthService.staffLogin(code, staffId.trim(), pwd);
           else if (role === 'student') result = await supabaseTableAuthService.studentLogin(code, admissionNo.trim(), pwd);
+          if (result == null && role === 'teacher') {
+            // Fallback to backend teacher login for setups where staff_login stores hashed/alternate credentials.
+            return authService.teacherLogin({ school_code: code, staff_id: staffId.trim(), password: pwd });
+          }
           if (result == null) {
             const msg = role === 'student'
               ? 'No account found for this School code + Student ID, or wrong password. Check RLS if table exists.'
@@ -83,6 +119,13 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
           }
           return result;
         } catch (e) {
+          if (role === 'teacher') {
+            try {
+              return await authService.teacherLogin({ school_code: code, staff_id: staffId.trim(), password: pwd });
+            } catch {
+              // Preserve original table-auth error below when fallback also fails.
+            }
+          }
           if (__DEV__) console.error('[Login] Supabase table auth error:', e);
           throw e;
         }
@@ -97,25 +140,75 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
     onSuccess: async (data) => {
       setInlineError(null);
       if (useSupabaseTableAuth) {
-        if (!data || typeof data !== 'object' || !('session_token' in data)) {
+        const token = getTokenFromResponse(data);
+        if (!data || typeof data !== 'object' || !token) {
           const msg = 'Invalid credentials or no account found.';
           setInlineError(msg);
           showToast(msg, 'error');
           if (__DEV__) console.warn('[Login] onSuccess with invalid data:', data);
           return;
         }
-        const payload = data as { session_token: string; role: 'admin' | 'teacher' | 'student'; school_code: string; user_id?: string; profile?: Profile | null };
+        const raw = data as Record<string, unknown>;
+        const sessionTok =
+          typeof raw.session_token === 'string' ? raw.session_token : token;
+        const isTableOnlySession =
+          typeof sessionTok === 'string' && sessionTok.startsWith('supabase-table-');
+
+        if (isTableOnlySession) {
+          const payload = data as {
+            session_token: string;
+            role: 'admin' | 'teacher' | 'student';
+            school_code: string;
+            user_id?: string;
+            profile?: Profile | null;
+          };
+          await login({
+            session_token: token,
+            role: payload.role as NonNullable<Role>,
+            school_code: payload.school_code,
+            user_id: payload.user_id,
+            profile: payload.profile ?? undefined,
+          });
+          router.replace(getDashboardPath(payload.role as NonNullable<Role>, payload.school_code) as never);
+          return;
+        }
+
+        // API response after Supabase table miss (e.g. hashed passwords): same shape as non-table login
+        const res = getSessionPayloadRecord(data);
+        const roleFromData = (res?.role ?? role) as NonNullable<Role>;
+        const roleKey = ALLOWED_ROLES.includes(roleFromData as LoginFormRole) ? roleFromData : role;
+        const school_code = (res?.school_code as string | undefined) ?? schoolCode.trim();
+        let user_id: string | undefined = typeof res?.user_id === 'string' ? res.user_id : undefined;
+        let profile: Profile | undefined = res?.profile as Profile | undefined;
+
+        if (role === 'admin' || roleKey === 'admin') {
+          profile = res?.school as Profile | undefined;
+        } else if (role === 'teacher' || roleKey === 'teacher') {
+          const t = res?.teacher as Profile | undefined;
+          user_id = typeof t?.id === 'string' ? t.id : undefined;
+          profile = t ? { name: t.name as string | undefined, staff_id: t.staff_id as string | undefined, ...t } : undefined;
+        } else if (role === 'student' || roleKey === 'student') {
+          const s = res?.student as Profile | undefined;
+          user_id = typeof s?.id === 'string' ? s.id : undefined;
+          profile = s
+            ? { name: s.name as string | undefined, admission_no: s.admission_no as string | undefined, ...s }
+            : undefined;
+        } else {
+          profile = res?.accountant as Profile | undefined;
+          user_id = typeof res?.user_id === 'string' ? res.user_id : undefined;
+        }
+
         await login({
-          session_token: payload.session_token,
-          role: payload.role as NonNullable<Role>,
-          school_code: payload.school_code,
-          user_id: payload.user_id,
-          profile: payload.profile ?? undefined,
+          session_token: token,
+          role: roleKey as NonNullable<Role>,
+          school_code,
+          user_id,
+          profile: profile ?? undefined,
         });
-        router.replace(getDashboardPath(payload.role as NonNullable<Role>, payload.school_code) as never);
+        router.replace(getDashboardPath(roleKey as NonNullable<Role>, school_code) as never);
         return;
       }
-      const token = getTokenFromResponse(data as Record<string, unknown>);
+      const token = getTokenFromResponse(data);
       if (!token) {
         showToast('Invalid response from server', 'error');
         return;
@@ -280,6 +373,8 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
               label="Staff ID"
               value={staffId}
               onChangeText={setStaffId}
+              autoCapitalize="characters"
+              autoCorrect={false}
               editable={!loading}
               themeOverrides={inputOverrides}
             />
@@ -297,9 +392,23 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
             label="Password"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             editable={!loading}
             themeOverrides={inputOverrides}
+            autoCapitalize="none"
+            rightAccessory={
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={12}
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={inputOverrides?.labelColor ?? '#6B7280'}
+                />
+              </Pressable>
+            }
           />
           {inlineError ? (
             <View style={styles.errorWrap}>

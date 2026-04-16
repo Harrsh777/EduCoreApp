@@ -1,13 +1,12 @@
 /**
- * Supabase table-based auth: validate against accepted_schools, staff_login, student_login.
- * - Admin: accepted_schools (school_code, password)
- * - Staff: staff_login (school_code, staff_id, plain_password)
- * - Student: student_login (school_code, admission_no, plain_password)
- * For hashed passwords only, use a Supabase RPC to verify server-side.
+ * Supabase table-based auth: accepted_schools, staff_login, student_login.
+ * - Admin: accepted_schools (school_code + password column)
+ * - Staff / student: plain_password when set, otherwise password_hash (bcrypt, same as typical Node bcrypt)
  */
 
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/auth-store';
+import bcrypt from 'bcryptjs';
 
 export type SessionPayload = {
   session_token: string;
@@ -21,6 +20,65 @@ function makeToken(prefix: string, id: string): string {
   return `supabase-table-${prefix}-${id}-${Date.now()}`;
 }
 
+/** Match plain_password if present; otherwise verify bcrypt password_hash */
+function passwordMatches(plain: string, row: { plain_password?: string | null; password_hash?: string | null }): boolean {
+  const storedPlain = row.plain_password;
+  if (storedPlain != null && storedPlain !== '' && storedPlain === plain) return true;
+  const hash = row.password_hash;
+  if (hash == null || hash === '') return false;
+  try {
+    return bcrypt.compareSync(plain, hash);
+  } catch {
+    return false;
+  }
+}
+
+type StaffRow = {
+  id?: string;
+  school_code?: string;
+  staff_id?: string;
+  plain_password?: string | null;
+  password_hash?: string | null;
+};
+
+type StudentRow = {
+  id?: string;
+  school_code?: string;
+  admission_no?: string;
+  plain_password?: string | null;
+  password_hash?: string | null;
+};
+
+const STAFF_FIELDS = 'id, school_code, staff_id, plain_password, password_hash';
+const STUDENT_FIELDS = 'id, school_code, admission_no, plain_password, password_hash';
+
+/** Prefer exact school_code match; fall back to ILIKE for case-only differences (avoids ILIKE when eq already works). */
+async function fetchStaffLoginRow(code: string, staffId: string): Promise<StaffRow | null> {
+  const base = () =>
+    supabase.from('staff_login').select(STAFF_FIELDS).eq('staff_id', staffId).eq('is_active', true);
+
+  const first = await base().eq('school_code', code).maybeSingle();
+  if (first.error) throw first.error;
+  if (first.data) return first.data as StaffRow;
+
+  const second = await base().ilike('school_code', code).maybeSingle();
+  if (second.error) throw second.error;
+  return (second.data as StaffRow) ?? null;
+}
+
+async function fetchStudentLoginRow(code: string, admissionNo: string): Promise<StudentRow | null> {
+  const base = () =>
+    supabase.from('student_login').select(STUDENT_FIELDS).eq('admission_no', admissionNo).eq('is_active', true);
+
+  const first = await base().eq('school_code', code).maybeSingle();
+  if (first.error) throw first.error;
+  if (first.data) return first.data as StudentRow;
+
+  const second = await base().ilike('school_code', code).maybeSingle();
+  if (second.error) throw second.error;
+  return (second.data as StudentRow) ?? null;
+}
+
 export const supabaseTableAuthService = {
   /** Admin: accepted_schools by school_code + password */
   async adminLogin(school_code: string, password: string): Promise<SessionPayload | null> {
@@ -30,7 +88,8 @@ export const supabaseTableAuthService = {
       .select('id, school_code, school_name, password')
       .eq('school_code', code)
       .maybeSingle();
-    if (error || !data) return null;
+    if (error) throw error;
+    if (!data) return null;
     const row = data as { id?: string; school_code?: string; school_name?: string; password?: string };
     if (row.password !== password) return null;
     return {
@@ -42,21 +101,14 @@ export const supabaseTableAuthService = {
     };
   },
 
-  /** Staff: staff_login by school_code + staff_id + plain_password */
+  /** Staff: staff_login — school_code (case-insensitive), staff_id, plain_password or password_hash */
   async staffLogin(school_code: string, staff_id: string, password: string): Promise<SessionPayload | null> {
     const code = school_code.trim();
     const sid = staff_id.trim();
-    const { data, error } = await supabase
-      .from('staff_login')
-      .select('id, school_code, staff_id, plain_password')
-      .eq('school_code', code)
-      .eq('staff_id', sid)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (error || !data) return null;
-    const row = data as { id?: string; school_code?: string; staff_id?: string; plain_password?: string | null };
-    const storedPassword = row.plain_password ?? '';
-    if (storedPassword !== password) return null;
+    const data = await fetchStaffLoginRow(code, sid);
+    if (!data) return null;
+    const row = data;
+    if (!passwordMatches(password, row)) return null;
     return {
       session_token: makeToken('staff', row.id ?? sid),
       role: 'teacher',
@@ -66,22 +118,14 @@ export const supabaseTableAuthService = {
     };
   },
 
-  /** Student: student_login by school_code + admission_no + plain_password */
+  /** Student: student_login — school_code (case-insensitive), admission_no, plain_password or password_hash */
   async studentLogin(school_code: string, admission_no: string, password: string): Promise<SessionPayload | null> {
     const code = school_code.trim();
     const adm = admission_no.trim();
-    const { data, error } = await supabase
-      .from('student_login')
-      .select('id, school_code, admission_no, plain_password')
-      .eq('school_code', code)
-      .eq('admission_no', adm)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (error) throw error;
+    const data = await fetchStudentLoginRow(code, adm);
     if (!data) return null;
-    const row = data as { id?: string; school_code?: string; admission_no?: string; plain_password?: string | null };
-    const storedPassword = row.plain_password ?? '';
-    if (storedPassword !== password) return null;
+    const row = data;
+    if (!passwordMatches(password, row)) return null;
     return {
       session_token: makeToken('student', row.id ?? adm),
       role: 'student',

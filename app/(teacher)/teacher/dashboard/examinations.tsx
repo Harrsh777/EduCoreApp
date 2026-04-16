@@ -26,8 +26,15 @@ export default function TeacherExaminationsScreen() {
   const { schoolCode, teacher, path } = useTeacher();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['teacher', 'exams', schoolCode, teacher?.id],
-    queryFn: () => teacherService.getExams({ school_code: schoolCode, teacher_id: teacher?.id ?? '' }).then((r) => r.data),
+    queryKey: ['teacher', 'exams', schoolCode, teacher?.id, teacher?.staff_id],
+    queryFn: () =>
+      teacherService
+        .getExams({
+          school_code: schoolCode,
+          teacher_id: teacher?.id ?? '',
+          staff_id: teacher?.staff_id,
+        })
+        .then((r) => r.data),
     enabled: Boolean(schoolCode && teacher?.id),
   });
 

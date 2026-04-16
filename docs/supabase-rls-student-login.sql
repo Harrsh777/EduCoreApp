@@ -11,3 +11,13 @@ CREATE POLICY "anon_select_student_login"
   FOR SELECT
   TO anon
   USING (true);
+
+-- staff_login (same pattern as student_login for table-based auth from the app)
+ALTER TABLE staff_login ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_select_staff_login" ON staff_login;
+CREATE POLICY "anon_select_staff_login"
+  ON staff_login
+  FOR SELECT
+  TO anon
+  USING (true);

@@ -58,6 +58,19 @@ export default function TeacherMyLeavesScreen() {
   const [filter, setFilter] = useState<Filter>('all');
 
   const staffId = teacher?.staff_id ?? teacher?.id ?? '';
+  const { data: typesData } = useQuery({
+    queryKey: ['leave', 'types', schoolCode],
+    queryFn: () => leaveService.getLeaveTypes(schoolCode).then((r) => (r as { data?: Array<{ id: string; name?: string }> })?.data ?? []),
+    enabled: Boolean(schoolCode),
+  });
+  const leaveTypeNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (Array.isArray(typesData) ? typesData : []).forEach((t) => {
+      if (t?.id) map.set(String(t.id), t.name ?? '');
+    });
+    return map;
+  }, [typesData]);
+
   const { data: requestsData, refetch, isRefetching, isLoading, error } = useQuery({
     queryKey: ['leave', 'requests', schoolCode, staffId],
     queryFn: () =>
@@ -118,7 +131,11 @@ export default function TeacherMyLeavesScreen() {
           return (
             <Card key={r.id} style={styles.card}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardTitle}>{r.leave_type_name ?? 'Leave'}</Text>
+                <Text style={styles.cardTitle}>
+                  {r.leave_type_name?.trim() ||
+                    leaveTypeNameById.get(String(r.leave_type_id ?? ''))?.trim() ||
+                    'Leave'}
+                </Text>
                 <StatusPill status={r.status} />
               </View>
               <Text style={styles.cardDates}>{r.start_date ?? ''} – {r.end_date ?? ''}</Text>

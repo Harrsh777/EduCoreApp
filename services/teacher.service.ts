@@ -8,6 +8,37 @@ import { api } from '@/lib/api';
 
 type SchoolTeacher = { school_code: string; teacher_id: string };
 
+/** Unwrap common API shapes for GET /api/attendance/staff */
+/** True if teaching-assignments response has at least one assignment (web menu gating). */
+export function hasTeachingAssignmentsData(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const o = body as Record<string, unknown>;
+  const data = o.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const a = (data as { assignments?: unknown }).assignments;
+    if (Array.isArray(a) && a.length > 0) return true;
+  }
+  if (Array.isArray(o.assignments) && o.assignments.length > 0) return true;
+  return false;
+}
+
+export function normalizeStaffAttendanceList(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (!body || typeof body !== 'object') return [];
+  const o = body as Record<string, unknown>;
+  if (Array.isArray(o.data)) return o.data as unknown[];
+  if (Array.isArray(o.attendance)) return o.attendance;
+  if (Array.isArray(o.records)) return o.records;
+  if (Array.isArray(o.rows)) return o.rows;
+  if (o.data && typeof o.data === 'object' && !Array.isArray(o.data)) {
+    const d = o.data as Record<string, unknown>;
+    if (Array.isArray(d.data)) return d.data;
+    if (Array.isArray(d.attendance)) return d.attendance;
+    if (Array.isArray(d.records)) return d.records;
+  }
+  return [];
+}
+
 /** Response shape from GET /api/staff/[id]/menu */
 export type StaffMenuSubModule = {
   name: string;
@@ -30,8 +61,15 @@ export const teacherService = {
     return api.get<{ data: StaffMenuModule[] }>(`/api/staff/${staffId}/menu`);
   },
 
-  getClasses(params: SchoolTeacher & { staff_id?: string }) {
-    return api.get('/api/classes/teacher', { params: { school_code: params.school_code, teacher_id: params.teacher_id, staff_id: params.staff_id } });
+  /** GET /api/classes/teacher — pass array=true (web parity) when backend expects an array in data. */
+  getClasses(params: SchoolTeacher & { staff_id?: string; array?: boolean }) {
+    const q: Record<string, unknown> = {
+      school_code: params.school_code,
+      teacher_id: params.teacher_id,
+      staff_id: params.staff_id,
+    };
+    if (params.array) q.array = true;
+    return api.get('/api/classes/teacher', { params: q });
   },
 
   getGradeDistribution(params: SchoolTeacher) {
@@ -58,16 +96,36 @@ export const teacherService = {
     return api.delete(`/api/teacher/todos/${id}`);
   },
 
-  getDailyAgenda(params: SchoolTeacher) {
+  getDailyAgenda(params: SchoolTeacher & { staff_id?: string }) {
     return api.get('/api/timetable/daily-agenda', { params });
   },
 
-  getExams(params: SchoolTeacher) {
+  /** GET /api/examinations/v2/teacher */
+  getExams(params: SchoolTeacher & { exam_type?: string; staff_id?: string }) {
     return api.get('/api/examinations/v2/teacher', { params });
   },
 
+  /** GET /api/teachers/teaching-assignments — non-empty `data.assignments` ⇒ subject teacher (marks entry eligibility). */
+  getTeachingAssignments(params: { school_code: string; teacher_id: string }) {
+    return api.get('/api/teachers/teaching-assignments', { params });
+  },
+
+  /** GET /api/attendance/staff — `staff_id` must be the staff row UUID (same as teacher.id), not the employee code. */
   getAttendance(params: SchoolTeacher & { staff_id?: string; start_date?: string; end_date?: string }) {
-    return api.get('/api/attendance/staff', { params: { school_code: params.school_code, staff_id: params.staff_id ?? params.teacher_id, teacher_id: params.teacher_id, start_date: params.start_date, end_date: params.end_date } });
+    const staffUuid = params.teacher_id?.trim() || params.staff_id?.trim() || '';
+    return api
+      .get('/api/attendance/staff', {
+        params: {
+          school_code: params.school_code,
+          staff_id: staffUuid,
+          start_date: params.start_date,
+          end_date: params.end_date,
+        },
+      })
+      .then((res) => {
+        const list = normalizeStaffAttendanceList(res.data);
+        return { ...res, data: list };
+      });
   },
 
   getClassAttendance(params: { school_code: string; class_id: string; date?: string }) {

@@ -1,254 +1,208 @@
-/**
- * EduCore Login Hub – Clean Gradient Version
- * Matches provided screenshot layout
- */
-
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
 import React from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const ROLES = [
-  {
-    href: '/student/login',
-    title: 'Login as Student',
-    description: 'Access your student portal',
-    icon: 'person',
-  },
-  {
-    href: '/staff/login',
-    title: 'Login as Staff',
-    description: 'Manage your classes and tools',
-    icon: 'id-card',
-  },
-  {
-    href: '/admin/login',
-    title: 'Login as Admin',
-    description: 'Full system control & tools',
-    icon: 'shield-checkmark',
-  },
-];
+const PRIMARY = '#7C3AED';
+const SECONDARY = '#F472B6';
 
 export default function LoginHubScreen() {
   return (
-    <View style={styles.root}>
-      {/* Smooth Full-Screen Gradient (No Mesh) */}
-      <LinearGradient
-        colors={[
-          '#4f46e5', // indigo
-          '#7c3aed', // purple
-          '#9333ea', // violet
-          '#db2777', // pink blend
-          '#3b82f6', // blue
-          '#06b6d4', // teal
-        ]}
-        locations={[0, 0.25, 0.45, 0.6, 0.8, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
+    <LinearGradient
+      colors={['#F5F3FF', '#EFF6FF']}
+      style={styles.root}
+    >
+      <SafeAreaView style={styles.safe}>
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Logo + Brand */}
-          <View style={styles.logoRow}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="school" size={26} color="#fff" />
-            </View>
-            <Text style={styles.brand}>EduCore</Text>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <View style={styles.logo}>
+            <Ionicons name="school" size={20} color="#fff" />
           </View>
+          <Text style={styles.brand}>EduCore</Text>
+        </View>
 
-          {/* Title */}
-          <Text style={styles.welcome}>Welcome to EduCore</Text>
-          <Text style={styles.subtitle}>
-            Select your role to continue
+        {/* TITLE */}
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>
+            Welcome Back 👋
           </Text>
+          <Text style={styles.subtitle}>
+            Choose your role to continue
+          </Text>
+        </View>
 
-          {/* Centered Buttons */}
-          <View style={styles.cardContainer}>
-            {ROLES.map((role) => (
-              <Link key={role.href} href={role.href as never} asChild>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.card,
-                    pressed && { transform: [{ scale: 0.97 }] },
-                  ]}
-                >
-                  <View style={styles.iconWrap}>
-                    <Ionicons
-                      name={role.icon as any}
-                      size={22}
-                      color="#7c3aed"
-                    />
-                  </View>
+        {/* MAIN BOX */}
+        <View style={styles.roleBox}>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>
-                      {role.title}
-                    </Text>
-                    <Text style={styles.cardDesc}>
-                      {role.description}
-                    </Text>
-                  </View>
+          {/* STUDENT */}
+          <Link href="/student/login" asChild>
+            <Pressable style={({ pressed }) => [
+              styles.roleCard,
+              { backgroundColor: '#EEF2FF' },
+              pressed && styles.pressed
+            ]}>
+              <View style={[styles.iconWrap, { backgroundColor: '#C7D2FE' }]}>
+                <Ionicons name="person" size={22} color={PRIMARY} />
+              </View>
 
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color="#94a3b8"
-                  />
-                </Pressable>
-              </Link>
-            ))}
-          </View>
-
-          {/* Footer */}
-          <Text style={styles.empower}>EMPOWERING EDUCATION</Text>
-
-          <View style={styles.helpSection}>
-            <Text style={styles.helpText}>
-              Need help? We're here for you.
-            </Text>
-            <Pressable>
-              <Text style={styles.supportLink}>
-                Contact School Support
+              <Text style={styles.roleTitle}>Student</Text>
+              <Text style={styles.roleDesc}>
+                Access classes & grades
               </Text>
             </Pressable>
-          </View>
-        </ScrollView>
+          </Link>
+
+          {/* STAFF */}
+          <Link href="/staff/login" asChild>
+            <Pressable style={({ pressed }) => [
+              styles.roleCard,
+              { backgroundColor: '#FCE7F3' },
+              pressed && styles.pressed
+            ]}>
+              <View style={[styles.iconWrap, { backgroundColor: '#FBCFE8' }]}>
+                <Ionicons name="briefcase" size={22} color={SECONDARY} />
+              </View>
+
+              <Text style={styles.roleTitle}>Staff</Text>
+              <Text style={styles.roleDesc}>
+                Manage classes & tools
+              </Text>
+            </Pressable>
+          </Link>
+
+        </View>
+
+        {/* FOOTER */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Need help?
+          </Text>
+          <Text style={styles.link}>
+            Contact support
+          </Text>
+        </View>
+
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-
-  safe: { flex: 1 },
-
-  container: {
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 60,
-    alignItems: 'center',
+  root: {
+    flex: 1,
   },
 
-  logoRow: {
+  safe: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
+  },
+
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    marginTop: 20,
   },
 
-  logoCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
+  logo: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: PRIMARY,
     justifyContent: 'center',
-    marginRight: 12,
+    alignItems: 'center',
+    marginRight: 10,
   },
 
   brand: {
     fontFamily: 'PlayfairBold',
-    fontSize: 26,
-    color: '#ffffff',
+    fontSize: 22,
+    color: '#1F2937',
   },
 
-  welcome: {
+  titleWrap: {
+    marginTop: 40,
+  },
+
+  title: {
     fontFamily: 'PlayfairBold',
-    fontSize: 34,
-    color: '#ffffff',
-    textAlign: 'center',
-    marginBottom: 12,
+    fontSize: 30,
+    color: '#111827',
+    marginBottom: 6,
   },
 
   subtitle: {
-    fontFamily: 'Playfair',
-    fontSize: 18,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    marginBottom: 40,
+    fontSize: 15,
+    color: '#6B7280',
   },
 
-  cardContainer: {
-    width: '100%',
-    gap: 22,
-  },
-
-  card: {
+  roleBox: {
     flexDirection: 'row',
+    gap: 14,
+    marginTop: 30,
+  },
+
+  roleCard: {
+    flex: 1,
+    borderRadius: 20,
+    paddingVertical: 26,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    borderRadius: 40,
-    width: '100%',
+
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(124,58,237,0.15)',
-    alignItems: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: 'center',
-    marginRight: 18,
+    alignItems: 'center',
+    marginBottom: 12,
   },
 
-  cardTitle: {
+  roleTitle: {
     fontFamily: 'PlayfairBold',
-    fontSize: 20,
-    color: '#0f172a',
-    marginBottom: 4,
+    fontSize: 18,
+    color: '#111827',
   },
 
-  cardDesc: {
-    fontFamily: 'Playfair',
-    fontSize: 15,
-    color: '#64748b',
-  },
-
-  empower: {
-    marginTop: 60,
-    fontFamily: 'PlayfairBold',
+  roleDesc: {
     fontSize: 13,
-    letterSpacing: 2,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
-  helpSection: {
-    marginTop: 28,
+  footer: {
     alignItems: 'center',
   },
 
-  helpText: {
-    fontFamily: 'Playfair',
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: 10,
-    textAlign: 'center',
+  footerText: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 
-  supportLink: {
-    fontFamily: 'PlayfairBold',
-    fontSize: 17,
-    color: '#ffffff',
-    textDecorationLine: 'underline',
+  link: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: PRIMARY,
+  },
+
+  pressed: {
+    transform: [{ scale: 0.96 }],
   },
 });

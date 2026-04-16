@@ -12,6 +12,11 @@ export function getDiary(school_code: string, params?: { class_id?: string; acad
   return api.get('/api/diary', { params: { school_code, ...params } });
 }
 
+/** GET /api/diary/:id */
+export function getDiaryById(school_code: string, id: string) {
+  return api.get(`/api/diary/${id}`, { params: { school_code } });
+}
+
 /** POST /api/diary (upload homework). Tables: diaries, diary_targets, diary_attachments, diary_reads, accepted_schools. */
 export function postDiary(school_code: string, body: Record<string, unknown>) {
   return api.post('/api/diary', body, { params: { school_code } });
@@ -42,6 +47,7 @@ export function uploadDiaryAttachment(school_code: string, formData: FormData) {
 
 export const diaryService = {
   getDiary,
+  getDiaryById,
   postDiary,
   getDiaryStats,
   putDiary,

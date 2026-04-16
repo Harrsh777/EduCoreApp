@@ -4,10 +4,15 @@
  * Menu = filtered teacherBaseItems + dynamic from staff menu API (deduped).
  */
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuthStore } from './auth-store';
 import { rbacService } from '@/services/rbac.service';
-import { teacherService, type StaffMenuModule } from '@/services/teacher.service';
+import { schoolService } from '@/services/school.service';
+import {
+  teacherService,
+  hasTeachingAssignmentsData,
+  type StaffMenuModule,
+} from '@/services/teacher.service';
 
 export type Teacher = {
   id: string;
@@ -61,6 +66,8 @@ type TeacherContextValue = {
   /** Set of permission keys (view_staff, manage_staff, view_classes, etc.) */
   permissions: Set<string>;
   isClassTeacher: boolean;
+  /** Non-empty GET /api/teachers/teaching-assignments `data.assignments` (marks entry with timetable). */
+  hasTeachingAssignments: boolean;
   /** Modules from GET /api/staff/[id]/menu (dynamic sidebar items from role/staff_permissions) */
   staffMenuModules: StaffMenuModule[];
   permissionsLoading: boolean;
@@ -91,20 +98,88 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
   const school_code = useAuthStore((s) => s.school_code);
   const role = useAuthStore((s) => s.role);
 
+  const sessionStaffPk = user_id ?? (profile?.id as string) ?? '';
+  const profileStaffCode = profile?.staff_id as string | undefined;
+
+  /** Staff row UUID from GET /api/staff when session id is staff_login / wrong table */
+  const [resolvedStaffUuid, setResolvedStaffUuid] = useState<string | null>(null);
+  /** Name fields from matched staff row (session profile often has no full_name) */
+  const [staffRowExtras, setStaffRowExtras] = useState<{
+    full_name?: string;
+    name?: string;
+    first_name?: string;
+    last_name?: string;
+  }>({});
+
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [isClassTeacher, setIsClassTeacher] = useState(false);
+  const [hasTeachingAssignments, setHasTeachingAssignments] = useState(false);
   const [staffMenuModules, setStaffMenuModules] = useState<StaffMenuModule[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
+
+  useEffect(() => {
+    if (role !== 'teacher' || !school_code || !sessionStaffPk) {
+      setResolvedStaffUuid(null);
+      setStaffRowExtras({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await schoolService.getStaff(school_code);
+        const raw = r.data;
+        const list = (Array.isArray(raw) ? raw : (raw as { data?: unknown[] })?.data ?? []) as Record<string, unknown>[];
+        const matchByUuid = list.find((x) => String(x.id) === String(sessionStaffPk));
+        const code = profileStaffCode?.trim();
+        const matchByCode = code
+          ? list.find((x) => String(x.staff_id ?? '').toLowerCase() === code.toLowerCase())
+          : undefined;
+        const match = matchByUuid ?? matchByCode;
+        if (cancelled) return;
+        setResolvedStaffUuid(match?.id ? String(match.id) : null);
+        if (match) {
+          setStaffRowExtras({
+            full_name: match.full_name as string | undefined,
+            name: match.name as string | undefined,
+            first_name: match.first_name as string | undefined,
+            last_name: match.last_name as string | undefined,
+          });
+        } else {
+          setStaffRowExtras({});
+        }
+      } catch {
+        if (!cancelled) {
+          setResolvedStaffUuid(null);
+          setStaffRowExtras({});
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, school_code, sessionStaffPk, profileStaffCode]);
+
+  const effectiveStaffId = (resolvedStaffUuid ?? sessionStaffPk) || '';
+
+  const resolvedTeacherName = useMemo(() => {
+    const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const fromRow =
+      s(staffRowExtras.full_name) ||
+      s(staffRowExtras.name) ||
+      [s(staffRowExtras.first_name), s(staffRowExtras.last_name)].filter(Boolean).join(' ');
+    if (fromRow) return fromRow;
+    return s(profile?.full_name) || s(profile?.name) || s((profile as { teacher_name?: string } | null)?.teacher_name);
+  }, [staffRowExtras, profile]);
 
   const teacher: Teacher | null =
     role === 'teacher' && school_code
       ? {
-          id: user_id ?? (profile?.id as string) ?? '',
-          school_code: school_code,
-          staff_id: profile?.staff_id as string | undefined,
-          full_name: (profile?.name as string) ?? (profile?.full_name as string),
-          role: 'teacher',
           ...profile,
+          id: effectiveStaffId,
+          school_code,
+          staff_id: profileStaffCode ?? (profile?.staff_id as string | undefined),
+          full_name: resolvedTeacherName || undefined,
+          role: 'teacher',
         }
       : null;
 
@@ -112,24 +187,32 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
     if (!teacher?.id || !school_code) {
       setPermissionsLoading(false);
       setStaffMenuModules([]);
+      setHasTeachingAssignments(false);
       return;
     }
     let cancelled = false;
     setPermissionsLoading(true);
     Promise.all([
       rbacService.getStaffPermissionsByStaff(school_code, teacher.id).then((r) => r.data),
-      teacherService.getClasses({
-        school_code,
-        teacher_id: teacher.id,
-        staff_id: teacher.staff_id,
-      }).then((r) => r.data),
+      teacherService
+        .getClasses({
+          school_code,
+          teacher_id: teacher.id,
+          staff_id: teacher.staff_id,
+          array: true,
+        })
+        .then((r) => r.data),
+      teacherService
+        .getTeachingAssignments({ school_code, teacher_id: teacher.id })
+        .then((r) => r.data)
+        .catch(() => null),
       teacherService.getStaffMenu(teacher.id).then((r) => {
         const data = (r as { data?: { data?: StaffMenuModule[] } })?.data;
         const list = Array.isArray(data) ? data : (data as { data?: StaffMenuModule[] })?.data ?? [];
         return Array.isArray(list) ? list : [];
       }),
     ])
-      .then(([permsData, classesData, menuModules]) => {
+      .then(([permsData, classesData, teachingAssignData, menuModules]) => {
         if (cancelled) return;
         const perms = new Set<string>();
         const data = permsData as { data?: { modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[] }; modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[] };
@@ -151,12 +234,14 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
           ? classesData
           : (classesData as { data?: unknown[] })?.data ?? (classesData as { classes?: unknown[] })?.classes ?? [];
         setIsClassTeacher(Array.isArray(list) && list.length > 0);
+        setHasTeachingAssignments(hasTeachingAssignmentsData(teachingAssignData));
         setStaffMenuModules(Array.isArray(menuModules) ? menuModules : []);
       })
       .catch(() => {
         if (!cancelled) {
           setPermissions(new Set());
           setIsClassTeacher(false);
+          setHasTeachingAssignments(false);
           setStaffMenuModules([]);
         }
       })
@@ -187,6 +272,7 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
     schoolCode: school_code ?? '',
     permissions,
     isClassTeacher,
+    hasTeachingAssignments,
     staffMenuModules,
     permissionsLoading,
     path,

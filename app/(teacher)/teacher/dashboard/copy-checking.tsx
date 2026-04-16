@@ -1,6 +1,6 @@
 /**
  * Copy Checking: read-only. Classes teacher handles, timetable grouped by day.
- * GET /api/classes/teacher, GET /api/timetable/slots.
+ * GET /api/classes/teacher?...&array=true, GET /api/timetable/slots?teacher_id=
  */
 
 import { useMemo } from 'react';
@@ -35,21 +35,48 @@ type Slot = {
   end_time?: string;
 };
 
+function unwrapSlotsBody(raw: unknown): Slot[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw as Slot[];
+  if (typeof raw !== 'object') return [];
+  const o = raw as Record<string, unknown>;
+  if (Array.isArray(o.slots)) return o.slots as Slot[];
+  if (Array.isArray(o.data)) return o.data as Slot[];
+  const d = o.data;
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    const inner = d as Record<string, unknown>;
+    if (Array.isArray(inner.slots)) return inner.slots as Slot[];
+    if (Array.isArray(inner.data)) return inner.data as Slot[];
+  }
+  return [];
+}
+
 export default function TeacherCopyCheckingScreen() {
   const { schoolCode, teacher } = useTeacher();
   const teacherId = teacher?.id ?? '';
 
   const { data: classesData, isLoading: classesLoading } = useQuery({
-    queryKey: ['teacher', 'classes', schoolCode, teacherId],
+    queryKey: ['teacher', 'classes', schoolCode, teacherId, teacher?.staff_id, 'array'],
     queryFn: () =>
-      teacherService.getClasses({ school_code: schoolCode, teacher_id: teacherId }).then((r) => (r as { data?: unknown[] })?.data ?? []),
+      teacherService
+        .getClasses({
+          school_code: schoolCode,
+          teacher_id: teacherId,
+          staff_id: teacher?.staff_id,
+          array: true,
+        })
+        .then((r) => {
+          const body = r.data;
+          if (Array.isArray(body)) return body;
+          return (body as { data?: unknown[] })?.data ?? [];
+        }),
     enabled: Boolean(schoolCode && teacherId),
   });
 
   const { data: slotsData, isLoading: slotsLoading } = useQuery({
     queryKey: ['teacher', 'timetable', 'slots', schoolCode, teacherId],
     queryFn: () =>
-      timetableService.getTimetableSlots(schoolCode, { teacher_id: teacherId }).then((r) => (r as { data?: Slot[] })?.data ?? []),
+      timetableService.getTimetableSlots(schoolCode, { teacher_id: teacherId }).then((r) => unwrapSlotsBody(r.data)),
     enabled: Boolean(schoolCode && teacherId),
   });
 

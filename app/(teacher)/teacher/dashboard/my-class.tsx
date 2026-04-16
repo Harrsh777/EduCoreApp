@@ -1,10 +1,10 @@
 /**
- * My Class (class teacher): class info, timetable grid, optional student list.
- * APIs: GET classes/teacher, students (filter by class), timetable/slots.
+ * My Class (class teacher).
+ * GET /api/classes/teacher?...&array=true; GET /api/students?...&status=active; GET /api/timetable/slots?class_id=
  */
 
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTeacher } from '@/lib/teacher-context';
@@ -16,14 +16,54 @@ import { textStyles } from '@/theme/typography';
 
 const TEACHER_GREEN = '#16A34A';
 
+type TeacherClassRow = {
+  id: string;
+  name?: string;
+  class_name?: string;
+  section?: string;
+  academic_year?: string | number;
+};
+
+function classChipLabel(c: TeacherClassRow): string {
+  const base = (c.class_name ?? c.name ?? '').trim();
+  const sec = (c.section ?? '').trim();
+  if (base && sec) return `${base}-${sec}`;
+  if (base) return base;
+  return c.id;
+}
+
+function unwrapTimetableSlots(raw: unknown): unknown[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'object') return [];
+  const o = raw as Record<string, unknown>;
+  if (Array.isArray(o.slots)) return o.slots;
+  if (Array.isArray(o.data)) return o.data;
+  const d = o.data;
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    const inner = d as Record<string, unknown>;
+    if (Array.isArray(inner.slots)) return inner.slots;
+    if (Array.isArray(inner.data)) return inner.data;
+  }
+  return [];
+}
+
 export default function TeacherMyClassScreen() {
   const router = useRouter();
   const { schoolCode, teacher, path } = useTeacher();
   const [selectedClassId, setSelectedClassId] = useState('');
 
   const { data: classesData } = useQuery({
-    queryKey: ['teacher', 'classes', schoolCode, teacher?.id],
-    queryFn: () => teacherService.getClasses({ school_code: schoolCode, teacher_id: teacher?.id ?? '' }).then((r) => r.data),
+    queryKey: ['teacher', 'classes', schoolCode, teacher?.id, teacher?.staff_id, 'array'],
+    queryFn: () =>
+      teacherService
+        .getClasses({
+          school_code: schoolCode,
+          teacher_id: teacher?.id ?? '',
+          staff_id: teacher?.staff_id,
+          array: true,
+        })
+        .then((r) => r.data),
     enabled: Boolean(schoolCode && teacher?.id),
   });
   const { data: slotsData, isLoading: loadingSlots } = useQuery({
@@ -31,19 +71,60 @@ export default function TeacherMyClassScreen() {
     queryFn: () => timetableService.getTimetableSlots(schoolCode, { class_id: selectedClassId }).then((r) => r.data),
     enabled: Boolean(schoolCode && selectedClassId),
   });
+
+  const classesList = (
+    Array.isArray(classesData) ? classesData : (classesData as { data?: unknown[] })?.data ?? []
+  ) as TeacherClassRow[];
+
+  const selectedClass = useMemo(
+    () => classesList.find((c) => c.id === selectedClassId),
+    [classesList, selectedClassId]
+  );
+
+  const rosterClassParam = (
+    (selectedClass?.class_name ?? selectedClass?.name ?? '').trim() || selectedClassId
+  ) as string;
+
   const { data: studentsData } = useQuery({
-    queryKey: ['students', schoolCode, selectedClassId],
-    queryFn: () => schoolService.getStudents(schoolCode, selectedClassId ? { class: selectedClassId } : undefined).then((r) => r.data),
-    enabled: Boolean(schoolCode && selectedClassId),
+    queryKey: [
+      'students',
+      'my-class',
+      schoolCode,
+      selectedClassId,
+      rosterClassParam,
+      selectedClass?.section ?? '',
+      selectedClass?.academic_year ?? '',
+    ],
+    queryFn: () =>
+      schoolService
+        .getStudents(schoolCode, {
+          class: rosterClassParam,
+          ...(selectedClass?.section != null && String(selectedClass.section).trim()
+            ? { section: String(selectedClass.section).trim() }
+            : {}),
+          ...(selectedClass?.academic_year != null && String(selectedClass.academic_year).trim()
+            ? { academic_year: String(selectedClass.academic_year).trim() }
+            : {}),
+          status: 'active',
+        })
+        .then((r) => r.data),
+    enabled: Boolean(schoolCode && selectedClassId && selectedClass),
   });
 
-  const classesList = (Array.isArray(classesData) ? classesData : (classesData as { data?: unknown[] })?.data ?? []) as Array<{ id: string; name?: string }>;
-  const slots = (Array.isArray(slotsData) ? slotsData : (slotsData as { data?: unknown[] })?.data ?? []) as Array<{ day?: string; period?: string; subject?: string; start_time?: string; end_time?: string }>;
-  const students = (Array.isArray(studentsData) ? studentsData : (studentsData as { data?: unknown[] })?.data ?? []) as Array<{ id: string; name?: string; admission_no?: string }>;
+  const slots = unwrapTimetableSlots(slotsData) as Array<{
+    day?: string;
+    period?: string;
+    subject?: string;
+    start_time?: string;
+    end_time?: string;
+  }>;
+  const students = (
+    Array.isArray(studentsData) ? studentsData : (studentsData as { data?: unknown[] })?.data ?? []
+  ) as Array<{ id: string; name?: string; admission_no?: string; student_name?: string; full_name?: string }>;
 
   useEffect(() => {
     if (classesList.length > 0 && !selectedClassId) setSelectedClassId(classesList[0].id);
-  }, [classesList.length, selectedClassId]);
+  }, [classesList, selectedClassId]);
 
   return (
     <View style={styles.root}>
@@ -64,7 +145,9 @@ export default function TeacherMyClassScreen() {
                   style={[styles.chip, selectedClassId === c.id && { backgroundColor: TEACHER_GREEN }]}
                   onPress={() => setSelectedClassId(c.id)}
                 >
-                  <Text style={[styles.chipText, selectedClassId === c.id && { color: '#fff' }]}>{c.name ?? c.id}</Text>
+                  <Text style={[styles.chipText, selectedClassId === c.id && { color: '#fff' }]}>
+                    {classChipLabel(c)}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -92,7 +175,9 @@ export default function TeacherMyClassScreen() {
             <Text style={styles.sectionTitle}>Students ({students.length})</Text>
             {students.slice(0, 10).map((s) => (
               <Pressable key={s.id} style={styles.row} onPress={() => router.push(path(`students`) as never)}>
-                <Text style={styles.rowName} numberOfLines={1}>{s.name ?? s.admission_no ?? s.id}</Text>
+                <Text style={styles.rowName} numberOfLines={1}>
+                  {s.name ?? s.student_name ?? s.full_name ?? s.admission_no ?? s.id}
+                </Text>
                 <Text style={styles.chevron}>›</Text>
               </Pressable>
             ))}

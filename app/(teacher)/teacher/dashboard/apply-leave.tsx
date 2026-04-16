@@ -57,7 +57,6 @@ export default function TeacherApplyLeaveScreen() {
   const submitMutation = useMutation({
     mutationFn: () =>
       leaveService.postStaffLeaveRequest(schoolCode, {
-        school_code: schoolCode,
         staff_id: teacher?.staff_id ?? teacher?.id,
         leave_type_id: leaveTypeId,
         start_date: startDate,

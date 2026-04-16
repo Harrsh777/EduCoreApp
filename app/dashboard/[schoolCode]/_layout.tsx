@@ -1,15 +1,13 @@
 /**
- * School dashboard layout: RoleGuard, SchoolProvider, Sidebar, Stack.
- * Sidebar shows all 24 modules; items with submodules expand on click.
+ * School dashboard layout: RoleGuard, SchoolProvider, Stack only (no sidebar).
+ * 3-Level ERP: Level 1 = (tabs) Home, Level 2 = domain/[domainId], Level 3 = module screens.
  * Route: /dashboard/:schoolCode
  */
 
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { DashboardWithSidebar } from '@/components/dashboard/DashboardWithSidebar';
 import { RoleGuard } from '@/lib/role-guard';
 import { SchoolProvider } from '@/lib/school-context';
-import { SidebarProvider } from '@/lib/sidebar-context';
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -31,10 +29,9 @@ export default function DashboardSchoolLayout() {
   return (
     <RoleGuard allowedRoles={['admin']} redirectTo="/admin/login">
       <SchoolProvider schoolCode={code}>
-        <SidebarProvider>
-          <DashboardWithSidebar>
-            <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="domain" options={{ title: 'Domain' }} />
           <Stack.Screen name="institute-info" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="password" />
@@ -47,6 +44,7 @@ export default function DashboardSchoolLayout() {
           <Stack.Screen name="calendar" />
           <Stack.Screen name="examinations" />
           <Stack.Screen name="marks" />
+          <Stack.Screen name="marks-entry" />
           <Stack.Screen name="fees" />
           <Stack.Screen name="library" />
           <Stack.Screen name="transport" />
@@ -59,13 +57,13 @@ export default function DashboardSchoolLayout() {
           <Stack.Screen name="homework" />
           <Stack.Screen name="expense-income" />
           <Stack.Screen name="front-office" />
+          <Stack.Screen name="gate-pass" />
+          <Stack.Screen name="visitor-management" />
           <Stack.Screen name="copy-checking" />
           <Stack.Screen name="attendance" />
           <Stack.Screen name="staff-access-control" />
-                <Stack.Screen name="[...slug]" options={{ title: 'Module' }} />
-              </Stack>
-          </DashboardWithSidebar>
-        </SidebarProvider>
+          <Stack.Screen name="[...slug]" options={{ title: 'Module' }} />
+        </Stack>
       </SchoolProvider>
     </RoleGuard>
   );

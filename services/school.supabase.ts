@@ -9,13 +9,14 @@ const code = (school_code: string) => school_code.trim();
 /** GET /api/students — list students by school_code, optional class/section/academic_year/search */
 export async function getStudentsFromSupabase(
   school_code: string,
-  params?: { class?: string; section?: string; academic_year?: string; search?: string }
+  params?: { class?: string; section?: string; academic_year?: string; search?: string; status?: string }
 ) {
   const sc = code(school_code);
   let q = supabase.from('students').select('*').eq('school_code', sc);
   if (params?.class) q = q.eq('class', params.class);
   if (params?.section) q = q.eq('section', params.section);
   if (params?.academic_year) q = q.eq('academic_year', params.academic_year);
+  if (params?.status?.trim()) q = q.eq('status', params.status.trim());
   if (params?.search?.trim()) {
     const s = params.search.trim();
     q = q.or(`student_name.ilike.%${s}%,full_name.ilike.%${s}%,admission_no.ilike.%${s}%`);

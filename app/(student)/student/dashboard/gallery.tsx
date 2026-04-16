@@ -1,6 +1,6 @@
 /**
  * Premium Student Gallery Module
- * Clean, Compact Mobile UI
+ * Compact Card UI — images contained in fixed small boxes
  */
 
 import { useStudent } from '@/lib/student-context';
@@ -24,18 +24,26 @@ import {
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+
+// 3-column compact grid
+const COLUMNS = 3;
+const CARD_GAP = 8;
+const HORIZONTAL_PADDING = 14;
+const CARD_WIDTH = (width - HORIZONTAL_PADDING * 2 - CARD_GAP * (COLUMNS - 1)) / COLUMNS;
+
+// Compact fixed image box size
+const IMAGE_BOX_SIZE = CARD_WIDTH - 12; // square box with small internal padding
 
 const COLORS = {
   primary: '#2563EB',
-  primaryLight: '#EFF6FF',
-  bg: '#F8FAFC',
+  primaryLight: '#DBEAFE',
+  bg: '#F1F5F9',
   surface: '#FFFFFF',
   textDark: '#0F172A',
   textMid: '#475569',
   textLight: '#94A3B8',
   border: '#E2E8F0',
-  error: '#EF4444',
+  badgeBg: 'rgba(37,99,235,0.85)',
 };
 
 type GalleryItem = {
@@ -59,7 +67,7 @@ const CATEGORIES = [
 ];
 
 // ------------------------------------------------------------------
-// Card Component  (animation ref is stable — avoids renderItem pitfall)
+// Compact Gallery Card
 // ------------------------------------------------------------------
 const GalleryCard = React.memo(
   ({
@@ -74,21 +82,37 @@ const GalleryCard = React.memo(
     const scale = useRef(new Animated.Value(1)).current;
 
     const onPressIn = () =>
-      Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 40 }).start();
+      Animated.spring(scale, {
+        toValue: 0.94,
+        useNativeDriver: true,
+        speed: 50,
+        bounciness: 4,
+      }).start();
 
     const onPressOut = () =>
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 24,
+        bounciness: 4,
+      }).start();
 
     return (
       <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
-        <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
-          <View style={styles.imageWrapper}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          style={styles.cardPressable}
+        >
+          {/* ── Fixed-size image box ── */}
+          <View style={styles.imageBox}>
             <Image
               source={{
                 uri:
                   item.image_url ||
                   item.url ||
-                  'https://via.placeholder.com/300x300?text=No+Image',
+                  'https://via.placeholder.com/200x200?text=No+Image',
               }}
               style={styles.image}
               resizeMode="cover"
@@ -102,12 +126,15 @@ const GalleryCard = React.memo(
             ) : null}
           </View>
 
-          <View style={styles.cardContent}>
+          {/* ── Text below box ── */}
+          <View style={styles.cardFooter}>
             <Text style={styles.cardTitle} numberOfLines={1}>
               {item.title || 'Untitled'}
             </Text>
             {item.created_at ? (
-              <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+              <Text style={styles.cardDate} numberOfLines={1}>
+                {formatDate(item.created_at)}
+              </Text>
             ) : null}
           </View>
         </Pressable>
@@ -146,7 +173,7 @@ export default function StudentGalleryScreen() {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
+      year: '2-digit',
     });
   }, []);
 
@@ -222,12 +249,12 @@ export default function StudentGalleryScreen() {
       ) : (
         <FlatList
           data={filteredItems}
-          numColumns={2}
+          numColumns={COLUMNS}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          columnWrapperStyle={styles.columnWrapper}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -272,14 +299,14 @@ const styles = StyleSheet.create({
   // Header
   header: {
     paddingTop: 56,
-    paddingBottom: 20,
+    paddingBottom: 18,
     paddingHorizontal: 20,
   },
   headerEyebrow: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.primary,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
@@ -287,10 +314,10 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     color: COLORS.textDark,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
 
-  // Category pills  ← KEY FIX: compact sizing
+  // Category pills
   categoryRow: {
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -298,12 +325,12 @@ const styles = StyleSheet.create({
   },
   categoryScroll: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     gap: 6,
   },
   pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
     borderRadius: 20,
     backgroundColor: COLORS.bg,
     borderWidth: 1,
@@ -317,7 +344,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
   },
   pillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: COLORS.textMid,
   },
@@ -328,72 +355,82 @@ const styles = StyleSheet.create({
 
   // List
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 12,
     paddingBottom: 40,
   },
   columnWrapper: {
-    justifyContent: 'space-between',
+    gap: CARD_GAP,
+    marginBottom: CARD_GAP,
   },
   countLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textLight,
     marginBottom: 10,
   },
 
-  // Card
+  // Card — tight wrapper
   card: {
     width: CARD_WIDTH,
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    marginBottom: 14,
+    borderRadius: 10,
     overflow: 'hidden',
-    // Shadow
     shadowColor: '#1E40AF',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  imageWrapper: {
+  cardPressable: {
+    padding: 6,
+  },
+
+  // Fixed-size image box — the key element
+  imageBox: {
+    width: IMAGE_BOX_SIZE,
+    height: IMAGE_BOX_SIZE,
+    borderRadius: 7,
+    overflow: 'hidden',
+    backgroundColor: COLORS.border,
     position: 'relative',
   },
   image: {
     width: '100%',
-    height: CARD_WIDTH * 0.65,
-    backgroundColor: COLORS.border,
+    height: '100%',
   },
   badge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(37, 99, 235, 0.88)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    maxWidth: CARD_WIDTH - 24,
+    bottom: 5,
+    left: 5,
+    backgroundColor: COLORS.badgeBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    maxWidth: IMAGE_BOX_SIZE - 10,
   },
   badgeText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  cardContent: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10,
+
+  // Card footer text
+  cardFooter: {
+    paddingTop: 5,
+    paddingHorizontal: 2,
+    paddingBottom: 2,
   },
   cardTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.textDark,
-    lineHeight: 17,
+    lineHeight: 15,
   },
   cardDate: {
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textLight,
-    marginTop: 3,
+    marginTop: 1,
   },
 
   // States
@@ -405,10 +442,9 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textLight,
   },
-
   errorBox: {
     alignItems: 'center',
     backgroundColor: COLORS.surface,
@@ -445,7 +481,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-
   emptyBox: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -462,4 +497,4 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     textAlign: 'center',
   },
-});
+});  

@@ -8,10 +8,12 @@ import { getGalleryFromSupabase } from './gallery.supabase';
 
 const p = (school_code: string) => ({ params: { school_code } });
 
-/** GET /api/gallery */
+/** GET /api/gallery?school_code=&category= */
 export function getGallery(school_code: string, category?: string) {
   if (env.USE_SUPABASE_DASHBOARD) return getGalleryFromSupabase(school_code, category);
-  return api.get('/api/gallery', p(school_code));
+  const params: Record<string, string> = { school_code };
+  if (category?.trim()) params.category = category.trim();
+  return api.get('/api/gallery', { params });
 }
 
 /** GET /api/gallery/[id] */

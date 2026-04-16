@@ -5,7 +5,7 @@
 
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Image } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTeacher } from '@/lib/teacher-context';
 import { schoolService } from '@/services/school.service';
@@ -15,6 +15,15 @@ import { textStyles } from '@/theme/typography';
 import { AppHeader, Card, PrimaryButton, ScreenWrapper } from '@/components/teacher';
 
 const { colors, spacing: s } = teacherDashboardTheme;
+
+function staffPhotoUrlFromResponse(resData: unknown): string | null {
+  const body = resData as { data?: unknown } | null | undefined;
+  const inner = body != null && typeof body === 'object' && 'data' in body ? (body as { data: unknown }).data : body;
+  if (!inner || typeof inner !== 'object') return null;
+  const o = inner as Record<string, unknown>;
+  const u = o.url ?? o.photo_url ?? o.signed_url;
+  return typeof u === 'string' && u.trim() ? u.trim() : null;
+}
 
 export default function TeacherSettingsScreen() {
   const router = useRouter();
@@ -29,6 +38,13 @@ export default function TeacherSettingsScreen() {
   const { data: staffData } = useQuery({
     queryKey: ['staff', 'self', schoolCode, staffId],
     queryFn: () => schoolService.getStaffById(schoolCode, staffId).then((r) => (r as { data?: { name?: string; email?: string; phone?: string } })?.data),
+    enabled: Boolean(schoolCode && staffId),
+  });
+
+  const { data: photoUrl } = useQuery({
+    queryKey: ['staff', 'photo', 'self', schoolCode, staffId],
+    queryFn: () =>
+      schoolService.getStaffPhotoSelf(schoolCode, staffId).then((r) => staffPhotoUrlFromResponse((r as { data?: unknown }).data)),
     enabled: Boolean(schoolCode && staffId),
   });
 
@@ -48,6 +64,7 @@ export default function TeacherSettingsScreen() {
       schoolService.updateStaff(schoolCode, staffId, { name: name.trim() || undefined, email: email.trim() || undefined, phone: phone.trim() || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'self', schoolCode, staffId] });
+      queryClient.invalidateQueries({ queryKey: ['staff', 'photo', 'self', schoolCode, staffId] });
       showToast('Profile updated', 'success');
     },
     onError: (err: Error) => showToast(err?.message ?? 'Update failed', 'error'),
@@ -67,7 +84,16 @@ export default function TeacherSettingsScreen() {
           <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Phone" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
           <View style={styles.photoRow}>
             <Text style={styles.label}>Profile photo</Text>
-            <Text style={styles.photoHint}>Upload via GET /api/staff/photos/self (connect upload UI as needed)</Text>
+            <View style={styles.photoPreviewRow}>
+              {photoUrl ? (
+                <Image source={{ uri: photoUrl }} style={styles.photoThumb} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Text style={styles.photoPlaceholderText}>{(name || '?').trim().charAt(0).toUpperCase() || '?'}</Text>
+                </View>
+              )}
+              <Text style={styles.photoHint}>Loaded from your school account (GET /api/staff/photos/self).</Text>
+            </View>
           </View>
           <View style={styles.saveBtn}><PrimaryButton title="Save changes" onPress={() => updateMutation.mutate()} loading={updateMutation.isPending} disabled={updateMutation.isPending} /></View>
         </Card>
@@ -91,7 +117,18 @@ const styles = StyleSheet.create({
   label: { ...textStyles.caption, color: colors.textMuted, marginBottom: s.xs, marginTop: s.sm },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: s.md, paddingVertical: s.sm, fontSize: 14, color: colors.textPrimary, marginBottom: s.xs },
   photoRow: { marginTop: s.md },
-  photoHint: { ...textStyles.caption, color: colors.textMuted, marginTop: s.xs },
+  photoPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: s.md, marginTop: s.xs },
+  photoThumb: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.border },
+  photoPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPlaceholderText: { ...textStyles.h4, color: colors.primaryDark },
+  photoHint: { ...textStyles.caption, color: colors.textMuted, flex: 1 },
   saveBtn: { marginTop: s.lg },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: s.sm },
   linkLabel: { ...textStyles.body, fontWeight: '600', color: colors.primary },

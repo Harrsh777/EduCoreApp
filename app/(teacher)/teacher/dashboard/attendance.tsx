@@ -5,6 +5,15 @@
  */
 
 import { useTeacher } from '@/lib/teacher-context';
+import type { TeacherClassRow as ClassRow } from '@/lib/teacher-class-roster';
+import {
+  unwrapSchoolClassesPayload,
+  enrichTeacherClassesFromSchool,
+  classPillLabel,
+  rosterClassQueryParam,
+  looksLikeUuid,
+  normalizeTeacherClassesFromApi,
+} from '@/lib/teacher-class-roster';
 import { useToastStore } from '@/lib/toast';
 import { schoolService } from '@/services/school.service';
 import { teacherService } from '@/services/teacher.service';
@@ -41,8 +50,65 @@ const G = {
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
 
-type ClassRow    = { id: string; name?: string; [k: string]: unknown };
-type StudentRow  = { id: string; student_id?: string; name?: string; admission_no?: string; photo_url?: string; [k: string]: unknown };
+type StudentRow = { id: string; student_id?: string; name?: string; admission_no?: string; photo_url?: string; [k: string]: unknown };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+/** Unwrap class attendance API: roster may be empty until GET /api/students is merged in. */
+function normalizeAttendanceStudents(raw: unknown): StudentRow[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const o = raw as Record<string, unknown>;
+  if (Array.isArray(o.students)) return o.students as StudentRow[];
+  if (Array.isArray(o.data)) return o.data as StudentRow[];
+  const data = o.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const d = data as Record<string, unknown>;
+    if (Array.isArray(d.students)) return d.students as StudentRow[];
+    if (Array.isArray(d.records)) return d.records as StudentRow[];
+    if (Array.isArray(d.data)) return d.data as StudentRow[];
+  }
+  if (Array.isArray(o.records)) return o.records as StudentRow[];
+  return [];
+}
+
+function normalizeRosterStudents(raw: unknown): StudentRow[] {
+  if (Array.isArray(raw)) return raw as StudentRow[];
+  if (!raw || typeof raw !== 'object') return [];
+  const o = raw as Record<string, unknown>;
+  if (Array.isArray(o.data)) return o.data as StudentRow[];
+  if (Array.isArray(o.students)) return o.students as StudentRow[];
+  const d = o.data;
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    const inner = d as Record<string, unknown>;
+    if (Array.isArray(inner.data)) return inner.data as StudentRow[];
+    if (Array.isArray(inner.students)) return inner.students as StudentRow[];
+  }
+  return [];
+}
+
+function studentRowId(s: StudentRow): string {
+  return String(s.id ?? s.student_id ?? '').trim();
+}
+
+function mergeRosterAndAttendance(roster: StudentRow[], fromAttendance: StudentRow[]): StudentRow[] {
+  const byId = new Map<string, StudentRow>();
+  for (const s of roster) {
+    const id = studentRowId(s);
+    if (!id) continue;
+    byId.set(id, { ...s, id });
+  }
+  for (const s of fromAttendance) {
+    const id = studentRowId(s);
+    if (!id) continue;
+    const prev = byId.get(id);
+    const status = (s as { status?: string }).status;
+    if (prev) {
+      byId.set(id, { ...prev, ...s, id, ...(status != null ? { status } : {}) });
+    } else {
+      byId.set(id, { ...s, id: s.id ?? s.student_id ?? id });
+    }
+  }
+  return Array.from(byId.values());
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function todayStr() {
@@ -175,26 +241,42 @@ export default function TeacherMarkAttendanceScreen() {
           school_code: schoolCode,
           teacher_id: teacher?.id ?? '',
           staff_id: teacher?.staff_id,
+          array: true,
         })
         .then((r) => r.data),
     enabled: Boolean(schoolCode && (teacher?.id || teacher?.staff_id)),
   });
-  const classesList = (
-    Array.isArray(classesData)
-      ? classesData
-      : (classesData as { data?: ClassRow[] })?.data ?? (classesData as { classes?: ClassRow[] })?.classes ?? []
-  ) as ClassRow[];
+  const { data: schoolClassesPayload, isLoading: loadingSchoolClasses } = useQuery({
+    queryKey: ['school', 'classes', schoolCode, 'mark-attendance-enrich'],
+    queryFn: () => schoolService.getClasses(schoolCode).then((r) => r.data),
+    enabled: Boolean(schoolCode),
+    staleTime: 60_000,
+  });
+
+  const teacherClassesBase = useMemo(() => normalizeTeacherClassesFromApi(classesData), [classesData]);
+
+  const schoolClassesList = useMemo(() => unwrapSchoolClassesPayload(schoolClassesPayload), [schoolClassesPayload]);
+
+  const classesList = useMemo(
+    () => enrichTeacherClassesFromSchool(teacherClassesBase, schoolClassesList),
+    [teacherClassesBase, schoolClassesList]
+  );
   const hasAssignedClasses = classesList.length > 0;
 
   // Auto-select first class
   useEffect(() => {
     if (!classId && classesList.length > 0) {
-      setClassId(classesList[0].id);
+      setClassId(String(classesList[0].id));
     }
   }, [classesList, classId]);
 
-  // ── Students / Attendance ──
-  const { data: attendanceData, isLoading: loadingStudents } = useQuery({
+  const selectedClass = useMemo(
+    () => classesList.find((c) => String(c.id) === String(classId)),
+    [classesList, classId]
+  );
+
+  // ── Existing marks + names (may be empty before any attendance exists) ──
+  const { data: attendanceData, isLoading: loadingAttendance } = useQuery({
     queryKey: ['attendance', 'class', schoolCode, classId, date],
     queryFn: () =>
       schoolService
@@ -203,13 +285,62 @@ export default function TeacherMarkAttendanceScreen() {
     enabled: Boolean(schoolCode && classId && date),
   });
 
+  // ── Full class roster (required per staff dashboard API doc) ──
+  /** Match `students.class` / section / academic_year — never use class UUID as `class` query. */
+  const rosterClassParam = rosterClassQueryParam(selectedClass);
+
+  const rosterQueryOk =
+    Boolean(schoolCode && classId && selectedClass) &&
+    Boolean(rosterClassParam) &&
+    !looksLikeUuid(rosterClassParam);
+
+  const { data: rosterData, isLoading: loadingRoster } = useQuery({
+    queryKey: [
+      'students',
+      'class-roster',
+      schoolCode,
+      classId,
+      rosterClassParam,
+      selectedClass?.section ?? '',
+      selectedClass?.academic_year ?? '',
+    ],
+    queryFn: () => {
+      const params: { class: string; section?: string; academic_year?: string; status?: string } = {
+        class: rosterClassParam,
+        status: 'active',
+      };
+      const sec = selectedClass?.section;
+      if (sec != null && String(sec).trim()) params.section = String(sec).trim();
+      const ay = selectedClass?.academic_year;
+      if (ay != null && String(ay).trim()) params.academic_year = String(ay).trim();
+      return schoolService.getStudents(schoolCode, params).then((r) => r.data);
+    },
+    enabled: rosterQueryOk,
+  });
+
   const students = useMemo(() => {
-    const raw =
-      (attendanceData as { students?: StudentRow[] })?.students ??
-      (attendanceData as { data?: StudentRow[] })?.data ??
-      [];
-    return raw as StudentRow[];
-  }, [attendanceData]);
+    const roster = normalizeRosterStudents(rosterData);
+    const fromAtt = normalizeAttendanceStudents(attendanceData);
+    const merged = mergeRosterAndAttendance(roster, fromAtt);
+    return merged.map((s) => ({
+      ...s,
+      name:
+        s.name ??
+        (s as { student_name?: string }).student_name ??
+        (s as { full_name?: string }).full_name,
+    }));
+  }, [rosterData, attendanceData]);
+
+  const loadingStudents =
+    loadingAttendance || loadingRoster || (Boolean(schoolCode && hasAssignedClasses) && loadingSchoolClasses);
+
+  const rosterBlocked =
+    Boolean(classId && selectedClass) &&
+    !rosterQueryOk &&
+    !loadingClasses &&
+    !loadingSchoolClasses &&
+    !loadingRoster &&
+    !loadingAttendance;
 
   // Seed attendance from API (existing records)
   useEffect(() => {
@@ -328,19 +459,19 @@ export default function TeacherMarkAttendanceScreen() {
           contentContainerStyle={styles.classPillRow}
         >
           {classesList.map((c) => {
-            const active = classId === c.id;
+            const active = String(classId) === String(c.id);
             return (
               <Pressable
-                key={c.id}
+                key={String(c.id)}
                 onPress={() => {
-                  setClassId(c.id);
+                  setClassId(String(c.id));
                   setAttendance({});
                   setIsMarked(false);
                 }}
                 style={[styles.classPill, active && styles.classPillActive]}
               >
                 <Text style={[styles.classPillText, active && styles.classPillTextActive]}>
-                  {c.name ?? c.id}
+                  {classPillLabel(c)}
                 </Text>
               </Pressable>
             );
@@ -410,8 +541,14 @@ export default function TeacherMarkAttendanceScreen() {
         ) : students.length === 0 ? (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyIcon}>👥</Text>
-            <Text style={styles.emptyTitle}>No students found</Text>
-            <Text style={styles.emptySub}>No students enrolled in this class</Text>
+            <Text style={styles.emptyTitle}>
+              {rosterBlocked ? 'Could not load class roster' : 'No students found'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {rosterBlocked
+                ? 'This class has no grade/section linked in school records, or only an ID was returned. Confirm the class exists under Classes and matches student records.'
+                : 'No students enrolled in this class'}
+            </Text>
           </View>
         ) : (
           <>

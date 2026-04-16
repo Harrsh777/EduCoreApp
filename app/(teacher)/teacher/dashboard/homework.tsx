@@ -3,7 +3,7 @@
  * GET /api/diary, GET /api/diary/stats, POST, PUT, DELETE, POST /api/diary/upload.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -59,7 +59,34 @@ export default function TeacherHomeworkScreen() {
     queryFn: () => schoolService.getClasses(schoolCode).then((r) => (r as { data?: { id: string; name?: string; class_name?: string }[] })?.data ?? []),
     enabled: Boolean(schoolCode),
   });
+  const { data: academicYearsRes } = useQuery({
+    queryKey: ['classes', 'academic-years', schoolCode],
+    queryFn: () => schoolService.getAcademicYears(schoolCode).then((r) => r.data),
+    enabled: Boolean(schoolCode),
+  });
   const classesList = (Array.isArray(classesData) ? classesData : []) as { id: string; name?: string; class_name?: string }[];
+
+  const yearOptions = useMemo(() => {
+    const raw = academicYearsRes;
+    const out: string[] = [];
+    if (Array.isArray(raw)) {
+      raw.forEach((item) => {
+        if (item != null && typeof item === 'object' && 'academic_year' in (item as object)) {
+          out.push(String((item as { academic_year: unknown }).academic_year));
+        } else if (item != null) out.push(String(item));
+      });
+    } else if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown[] }).data)) {
+      ((raw as { data: unknown[] }).data).forEach((item) => {
+        if (item != null && typeof item === 'object' && 'academic_year' in (item as object)) {
+          out.push(String((item as { academic_year: unknown }).academic_year));
+        } else if (item != null) out.push(String(item));
+      });
+    }
+    const uniq = [...new Set(out)].filter(Boolean).sort();
+    if (uniq.length > 0) return uniq;
+    const y = new Date().getFullYear();
+    return [String(y - 1), String(y), String(y + 1)];
+  }, [academicYearsRes]);
 
   const { data: diaryData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['diary', schoolCode, academicYear, page],
@@ -133,6 +160,19 @@ export default function TeacherHomeworkScreen() {
     setFormType(e.type ?? 'homework');
     setSelectedClassIds(Array.isArray(e.target_classes) ? e.target_classes : []);
     setModalOpen('edit');
+    diaryService
+      .getDiaryById(schoolCode, e.id)
+      .then((res) => {
+        const raw = (res as { data?: unknown }).data ?? res;
+        if (!raw || typeof raw !== 'object') return;
+        const row = raw as Record<string, unknown>;
+        setFormTitle(String(row.title ?? e.title ?? ''));
+        setFormContent(String(row.content ?? row.description ?? e.content ?? ''));
+        setFormType(String(row.type ?? e.type ?? 'homework'));
+        const t = row.target_class_ids ?? row.target_classes;
+        if (Array.isArray(t)) setSelectedClassIds(t.map(String));
+      })
+      .catch(() => {});
   };
   const closeModal = () => {
     setModalOpen(null);
@@ -155,8 +195,6 @@ export default function TeacherHomeworkScreen() {
   const toggleClass = (id: string) => {
     setSelectedClassIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
-
-  const yearOptions = [String(new Date().getFullYear() - 1), String(new Date().getFullYear()), String(new Date().getFullYear() + 1)];
 
   return (
     <View style={styles.root}>

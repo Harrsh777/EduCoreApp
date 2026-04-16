@@ -1,5 +1,5 @@
 /**
- * Certificate Management: templates, create, classwise, manage. Match web /api/certificates.
+ * Visitor Management — spec path /visitor-management. Check-in/check-out visitors; list and search.
  */
 
 import { useRouter } from 'expo-router';
@@ -11,9 +11,9 @@ import { textStyles } from '@/theme/typography';
 
 const INDIGO = '#4F46E5';
 
-export default function CertificatesScreen() {
+export default function VisitorManagementScreen() {
   const router = useRouter();
-  const { schoolCode } = useSchoolCode();
+  const { schoolCode, path } = useSchoolCode();
 
   if (!schoolCode) return null;
 
@@ -23,11 +23,17 @@ export default function CertificatesScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()} accessibilityLabel="Back">
           <Text style={styles.backText}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>Certificates</Text>
+        <Text style={styles.title}>Visitor Management</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <SectionHeader title="Certificate management" />
-        <Text style={styles.hint}>Templates, create, classwise generation and manage. Use the web app for full certificate flows.</Text>
+        <SectionHeader title="Visitors" />
+        <Text style={styles.hint}>
+          Check in: name, phone, purpose, person to meet. List with In/Out filter; check out on card or detail. APIs: GET/POST /api/visitors, PATCH mark-out.
+        </Text>
+        <Pressable style={styles.linkCard} onPress={() => router.push(path('front-office') as never)}>
+          <Text style={styles.linkText}>Front office dashboard</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -50,5 +56,17 @@ const styles = StyleSheet.create({
   title: { ...textStyles.h4, color: '#111827', flex: 1 },
   scroll: { flex: 1 },
   content: { padding: spacing[6], paddingBottom: spacing[12] },
-  hint: { ...textStyles.bodySm, color: '#6B7280' },
+  hint: { ...textStyles.bodySm, color: '#6B7280', marginBottom: spacing[4] },
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: spacing[4],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  linkText: { ...textStyles.body, color: '#111827', flex: 1 },
+  chevron: { fontSize: 20, color: '#9CA3AF', marginLeft: spacing[2] },
 });

@@ -223,21 +223,20 @@ export default function TeacherMyAttendanceScreen() {
   const [startDate, setStartDate] = useState(monthStartStr());
   const [endDate,   setEndDate]   = useState(monthEndStr());
 
-  const staffId = teacher?.staff_id ?? teacher?.id ?? '';
+  const staffRowId = teacher?.id ?? '';
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['teacher', 'attendance', schoolCode, staffId, startDate, endDate],
+    queryKey: ['teacher', 'attendance', schoolCode, staffRowId, startDate, endDate],
     queryFn: async () => {
       try {
         const res = await teacherService.getAttendance({
           school_code: schoolCode,
-          teacher_id:  teacher?.id ?? '',
-          staff_id:    staffId || undefined,
-          start_date:  startDate,
-          end_date:    endDate,
+          teacher_id: staffRowId,
+          start_date: startDate,
+          end_date: endDate,
         });
-        const payload = (res as { data?: unknown })?.data;
+        const list = Array.isArray(res.data) ? res.data : [];
         return {
-          list: Array.isArray(payload) ? payload : (payload as { data?: unknown[] })?.data ?? (payload as { attendance?: unknown[] })?.attendance ?? [],
+          list,
           error: false,
           message: undefined as string | undefined,
         };
@@ -250,13 +249,14 @@ export default function TeacherMyAttendanceScreen() {
           ? String((err as { message?: unknown }).message ?? '')
           : '';
         let message = 'Server may be unavailable.';
-        if (status === 404) message = 'Endpoint not found.';
+        if (status === 401) message = 'Session expired or not allowed. Sign in again.';
+        else if (status === 404) message = 'Endpoint not found.';
         else if (status === 500) message = 'Server error. Please try again.';
         else if (/network|timeout|failed|econnrefused/i.test(msg)) message = 'Network error. Check connection.';
         return { list: [], error: true, message };
       }
     },
-    enabled: Boolean(schoolCode && (teacher?.id || staffId) && startDate && endDate),
+    enabled: Boolean(schoolCode && staffRowId && startDate && endDate),
     retry: false,
   });
 
@@ -299,9 +299,7 @@ export default function TeacherMyAttendanceScreen() {
           <Text style={styles.backIcon}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>My Attendance</Text>
-        <Pressable hitSlop={12} style={styles.shareBtn}>
-          <Text style={styles.shareBtnText}>⬆</Text>
-        </Pressable>
+        <View style={styles.headerRightSpacer} />
       </View>
 
       <ScrollView
@@ -423,19 +421,8 @@ const styles = StyleSheet.create({
     color: C.textDark,
     letterSpacing: -0.3,
   },
-  shareBtn: {
+  headerRightSpacer: {
     width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: C.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  shareBtnText: {
-    fontSize: 16,
-    color: C.textMid,
   },
 
   scroll: {

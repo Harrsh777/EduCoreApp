@@ -1,6 +1,7 @@
 /**
  * Academic Calendar: year dropdown, month grid, event days (green dot), tap day → event list.
- * GET /api/calendar/academic, GET /api/calendar/events.
+ * Primary: GET /api/calendar/academic?school_code=&academic_year= (events / exam_schedules merge).
+ * Supplement: GET /api/calendar/events?start=&end= when needed.
  */
 
 import { useState, useMemo } from 'react';
@@ -61,7 +62,9 @@ export default function TeacherCalendarScreen() {
   const { data: academicData } = useQuery({
     queryKey: ['calendar', 'academic', schoolCode, academicYear],
     queryFn: () =>
-      calendarService.getCalendarAcademic(schoolCode, { academic_year: academicYear, include_events: true }).then((r) => (r as { data?: unknown })?.data),
+      calendarService
+        .getCalendarAcademic(schoolCode, { academic_year: academicYear, include_events: true })
+        .then((res) => (res as { data?: unknown }).data),
     enabled: Boolean(schoolCode),
   });
 
@@ -72,10 +75,42 @@ export default function TeacherCalendarScreen() {
     enabled: Boolean(schoolCode),
   });
 
-  const events = (Array.isArray(eventsData) ? eventsData : []) as CalendarEvent[];
+  const academicEvents = useMemo(() => {
+    const raw = academicData;
+    if (raw == null) return [] as CalendarEvent[];
+    if (Array.isArray(raw)) return raw as CalendarEvent[];
+    if (typeof raw !== 'object') return [];
+    const o = raw as Record<string, unknown>;
+    const out: CalendarEvent[] = [];
+    const take = (x: unknown) => {
+      if (Array.isArray(x)) out.push(...(x as CalendarEvent[]));
+    };
+    take(o.events);
+    const data = o.data;
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      take((data as Record<string, unknown>).events);
+      take((data as Record<string, unknown>).exam_schedules);
+    }
+    take(o.exam_schedules);
+    return out;
+  }, [academicData]);
+
+  const eventsFromRange = (Array.isArray(eventsData) ? eventsData : []) as CalendarEvent[];
+
+  const allEvents = useMemo(() => {
+    const byKey = new Map<string, CalendarEvent>();
+    const add = (e: CalendarEvent) => {
+      const k = String(e.id ?? `${(e.event_date ?? e.start ?? '').toString().slice(0, 10)}-${e.title ?? ''}`);
+      if (!byKey.has(k)) byKey.set(k, e);
+    };
+    academicEvents.forEach(add);
+    eventsFromRange.forEach(add);
+    return Array.from(byKey.values());
+  }, [academicEvents, eventsFromRange]);
+
   const eventsByDate = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
-    events.forEach((e) => {
+    allEvents.forEach((e) => {
       const d = (e.event_date ?? e.start ?? '').toString().slice(0, 10);
       if (d) {
         if (!map[d]) map[d] = [];
@@ -83,7 +118,7 @@ export default function TeacherCalendarScreen() {
       }
     });
     return map;
-  }, [events]);
+  }, [allEvents]);
 
   const monthDays = useMemo(() => getMonthDays(year, month), [year, month]);
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
@@ -184,7 +219,7 @@ export default function TeacherCalendarScreen() {
           </Card>
         )}
 
-        {isLoading && events.length === 0 ? (
+        {isLoading && allEvents.length === 0 ? (
           <View style={styles.loader}>
             <ActivityIndicator size="small" color={colors.primary} />
           </View>

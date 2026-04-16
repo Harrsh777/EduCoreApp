@@ -3,8 +3,8 @@
  * UI matches the provided design: summary cards, tab switcher, fee line items + receipts.
  */
 
+import { env } from '@/lib/env';
 import { useStudent } from '@/lib/student-context';
-import { feesService } from '@/services/fees.service';
 import { studentService } from '@/services/student.service';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -192,7 +192,7 @@ function ReceiptCard({
         style={styles.downloadBtn}
         onPress={() => (item.payment_id ?? item.id) && onDownload(item)}
       >
-        <Text style={styles.downloadText}>↓ Receipt</Text>
+        <Text style={styles.downloadText}>View / Download</Text>
       </Pressable>
     </View>
   );
@@ -334,25 +334,18 @@ export default function StudentFeesScreen() {
     // router.push({ pathname: '/student/fees/pay', params: { id: item.id } });
   };
 
+  /** Open receipt PDF per spec: GET /api/fees/receipts/[id]/download?school_code=... */
   const handleDownloadReceipt = (receipt: Receipt) => {
-    const paymentId = receipt.payment_id ?? receipt.id;
-    if (!paymentId) {
+    const id = receipt.payment_id ?? receipt.id;
+    if (!id) {
       Alert.alert('Download', 'Receipt ID not available.');
       return;
     }
-    feesService
-      .getReceiptViewUrl(schoolCode, paymentId)
-      .then((r) => {
-        const url = (r.data as { url?: string })?.url;
-        if (url) {
-          Linking.openURL(url).catch(() =>
-            Alert.alert('Error', 'Could not open receipt link.'),
-          );
-        } else {
-          Alert.alert('Download', 'No receipt URL available.');
-        }
-      })
-      .catch(() => Alert.alert('Download', 'Could not load receipt.'));
+    const base = (env.API_BASE_URL || '').replace(/\/+$/, '');
+    const url = `${base}/api/fees/receipts/${encodeURIComponent(id)}/download?school_code=${encodeURIComponent(schoolCode)}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Error', 'Could not open receipt. Try again later.'),
+    );
   };
 
   const isLoading = loadingFees;

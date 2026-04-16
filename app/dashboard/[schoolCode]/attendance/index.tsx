@@ -1,5 +1,5 @@
 /**
- * Attendance: overview (GET /api/attendance/overview), staff attendance. Tables: student_attendance, staff_attendance, classes, staff, students.
+ * Attendance: overview and staff attendance link.
  */
 
 import { useRouter } from 'expo-router';
@@ -61,6 +61,13 @@ export default function AttendanceScreen() {
         <SectionHeader title="Staff attendance" />
         <Pressable
           style={styles.linkCard}
+          onPress={() => router.push(path('attendance/staff') as never)}
+        >
+          <Text style={styles.linkText}>Mark staff attendance (by date)</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={styles.linkCard}
           onPress={() => router.push(path('staff-management/attendance') as never)}
         >
           <Text style={styles.linkText}>View staff attendance (by date range)</Text>
@@ -103,6 +110,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    marginBottom: spacing[2],
   },
   linkText: { ...textStyles.body, color: '#111827', flex: 1 },
   chevron: { fontSize: 20, color: '#9CA3AF', marginLeft: spacing[2] },

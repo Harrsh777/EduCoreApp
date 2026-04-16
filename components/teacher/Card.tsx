@@ -1,5 +1,5 @@
 /**
- * Card: white background, soft shadow, rounded 16. Teacher design system.
+ * Card: white background, border, rounded 16. Teacher design system (no box shadow).
  */
 
 import { View, StyleSheet, type ViewStyle } from 'react-native';
@@ -28,11 +28,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    // soft shadow
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    elevation: 0,
   },
 });

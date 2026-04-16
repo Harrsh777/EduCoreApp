@@ -3,7 +3,7 @@
  */
 
 import { View, TextInput, Text, StyleSheet, type TextInputProps } from 'react-native';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { colors } from '@/theme/colors';
 import { spacing, radii } from '@/theme/spacing';
 import { textStyles, fontSize } from '@/theme/typography';
@@ -27,6 +27,8 @@ type FloatingLabelInputProps = TextInputProps & {
   label: string;
   error?: string;
   themeOverrides?: InputThemeOverrides;
+  /** Shown inside the field on the right (e.g. password visibility toggle) */
+  rightAccessory?: ReactNode;
 };
 
 export function FloatingLabelInput({
@@ -37,6 +39,7 @@ export function FloatingLabelInput({
   onBlur,
   style,
   themeOverrides,
+  rightAccessory,
   ...rest
 }: FloatingLabelInputProps) {
   const [focused, setFocused] = useState(false);
@@ -72,21 +75,30 @@ export function FloatingLabelInput({
         >
           {label}
         </Text>
-        <TextInput
-          style={[styles.input, { color: inputColor }, fontFamily && { fontFamily }, style]}
-          value={value}
-          onFocus={(e) => {
-            setFocused(true);
-            onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            onBlur?.(e);
-          }}
-          placeholderTextColor={placeholderColor}
-          placeholder={floating ? '' : undefined}
-          {...rest}
-        />
+        <View style={styles.inputRow}>
+          <TextInput
+            style={[
+              styles.input,
+              { color: inputColor },
+              fontFamily && { fontFamily },
+              rightAccessory ? styles.inputWithAccessory : undefined,
+              style,
+            ]}
+            value={value}
+            onFocus={(e) => {
+              setFocused(true);
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              onBlur?.(e);
+            }}
+            placeholderTextColor={placeholderColor}
+            placeholder={floating ? '' : undefined}
+            {...rest}
+          />
+          {rightAccessory ? <View style={styles.accessory}>{rightAccessory}</View> : null}
+        </View>
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
@@ -116,12 +128,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   labelError: { color: colors.error.main },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 24,
+  },
   input: {
     ...textStyles.body,
     fontSize: fontSize.lg,
     color: colors.text.primary,
     paddingVertical: 0,
     minHeight: 24,
+    flex: 1,
+  },
+  inputWithAccessory: {
+    paddingRight: spacing[1],
+  },
+  accessory: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: spacing[2],
   },
   errorText: {
     ...textStyles.caption,

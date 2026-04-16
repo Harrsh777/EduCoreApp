@@ -1,6 +1,5 @@
 /**
  * Fees: dashboard, fee-heads, structures, collection, statements, reports.
- * APIs: GET /api/fees/v2/fee-heads, payments, receipts, reports.
  */
 
 import { useRouter } from 'expo-router';
