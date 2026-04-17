@@ -10,3 +10,4 @@ export { CategorySelector, type HomeSegment } from './CategorySelector';
 export { HomeSummaryCard } from './HomeSummaryCard';
 export { HomeListCard, type HomeListItem } from './HomeListCard';
 export { HeroMetricsSection } from './HeroMetricsSection';
+export { DashboardHomeGrid } from './DashboardHomeGrid';

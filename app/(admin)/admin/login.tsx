@@ -11,14 +11,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 export default function AdminLoginScreen() {
@@ -93,7 +93,13 @@ export default function AdminLoginScreen() {
       >
         {/* Back Button */}
         <AnimatedOrView style={animStyle}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/login');
+            }}
+          >
             <View style={styles.backButtonInner}>
               <Ionicons name="arrow-back" size={22} color="#ffffff" />
             </View>

@@ -18,7 +18,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useStudent } from '@/lib/student-context';
 import { env } from '@/lib/env';
 import { getStudentByAdmissionNo } from '@/services/school.service';
-import { getDashboardHomeStats, invalidateDashboardCache } from '@/services/student-dashboard.service';
+import {
+  countActiveReceipts,
+  getDashboardHomeStats,
+  invalidateDashboardCache,
+  sumFeesDueInMonthAndQuarter,
+} from '@/services/student-dashboard.service';
 import { communicationService } from '@/services/communication.service';
 import { studentService } from '@/services/student.service';
 import {
@@ -26,10 +31,11 @@ import {
   SectionCard,
   ModuleButton,
   LoadingSkeleton,
-  HeroMetricsSection,
+  DashboardHomeGrid,
   HomeListCard,
   type HomeListItem,
 } from '@/components/student-dashboard';
+import { useStudentClassTeacherCard } from '@/hooks/useStudentClassTeacherCard';
 import { studentDashboardTheme } from '@/theme/studentDashboard';
 import { STUDENT_DASHBOARD_SECTIONS } from '@/constants/studentDashboardMenu';
 
@@ -41,9 +47,13 @@ const Container = useAnimation ? Animated.View : View;
 /** Pick display name from API student record (DB may use full_name, name, or student_name). */
 function studentDisplayName(record: Record<string, unknown> | null | undefined): string {
   if (!record || typeof record !== 'object') return 'Student';
+  const firstName = typeof record.first_name === 'string' ? record.first_name.trim() : '';
+  const lastName = typeof record.last_name === 'string' ? record.last_name.trim() : '';
   const name =
     (record.full_name as string) ?? (record.name as string) ?? (record.student_name as string);
-  return typeof name === 'string' && name.trim() ? name.trim() : 'Student';
+  if (typeof name === 'string' && name.trim()) return name.trim();
+  if (firstName || lastName) return [firstName, lastName].filter(Boolean).join(' ');
+  return 'Student';
 }
 
 export default function StudentDashboardHomeScreen() {
@@ -80,15 +90,28 @@ export default function StudentDashboardHomeScreen() {
   const nameFromAdmission = studentByAdmission
     ? studentDisplayName(studentByAdmission as Record<string, unknown>)
     : 'Student';
+  const nameFromContext =
+    student?.full_name ??
+    (student as { name?: string; student_name?: string; first_name?: string; last_name?: string })?.name ??
+    (student as { student_name?: string })?.student_name ??
+    ([
+      (student as { first_name?: string })?.first_name,
+      (student as { last_name?: string })?.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim() ||
+      'Student');
   const fullName =
     nameFromApi !== 'Student'
       ? nameFromApi
       : nameFromAdmission !== 'Student'
         ? nameFromAdmission
-        : student?.full_name ?? (student as { name?: string })?.name ?? 'Student';
-  const classSection = [student?.class, student?.section].filter(Boolean).join(' • ') || '';
-  const canFetchMarks = Boolean(schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no)));
+        : nameFromContext;
   const canFetchAttendance = Boolean(schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no)));
+  const canFetchHomeExtras = Boolean(
+    schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no))
+  );
 
   const {
     data: stats,
@@ -122,51 +145,97 @@ export default function StudentDashboardHomeScreen() {
     staleTime: 60 * 1000,
   });
 
-  const { data: marksData } = useQuery({
-    queryKey: ['student', 'marks', 'summary', schoolCode, studentId, student?.admission_no],
-    queryFn: async () => {
-      let effectiveId = studentId;
-      if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
-        try {
-          const r = await getStudentByAdmissionNo(schoolCode, student.admission_no);
-          const row = (r as { data?: { id?: string } })?.data;
-          if (row?.id) effectiveId = String(row.id);
-        } catch {
-          // keep studentId
-        }
+  const classTeacherCard = useStudentClassTeacherCard();
+
+  async function resolveEffectiveStudentId(): Promise<string> {
+    let effectiveId = studentId;
+    if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
+      try {
+        const r = await getStudentByAdmissionNo(schoolCode, student.admission_no);
+        const row = (r as { data?: { id?: string } })?.data;
+        if (row?.id) effectiveId = String(row.id);
+      } catch {
+        // keep studentId
       }
-      if (!effectiveId) return null;
-      const r = await studentService.getMarks({ school_code: schoolCode, student_id: effectiveId });
-      return r?.data ?? r;
+    }
+    return effectiveId;
+  }
+
+  const { data: homeFeesRaw, refetch: refetchHomeFees, isLoading: loadingHomeFees } = useQuery({
+    queryKey: ['student', 'home', 'fees', schoolCode, studentId, student?.admission_no],
+    queryFn: async () => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return [];
+      const r = await studentService.getFees({ school_code: schoolCode, student_id: effectiveId });
+      const body = (r as { data?: unknown })?.data ?? r;
+      const list = Array.isArray(body) ? body : (body as { data?: unknown[] })?.data ?? (body as { fees?: unknown[] })?.fees ?? [];
+      return Array.isArray(list) ? list : [];
     },
-    enabled: canFetchMarks,
+    enabled: canFetchHomeExtras,
     staleTime: 60 * 1000,
   });
 
-  const marksAveragePercent = useMemo(() => {
-    const raw = marksData;
-    const data = Array.isArray(raw) ? raw : (raw as { data?: unknown[] })?.data ?? [];
-    if (!Array.isArray(data) || data.length === 0) return undefined;
-    let total = 0;
-    let count = 0;
-    (data as Record<string, unknown>[]).forEach((exam) => {
-      const pct = exam.overall_percentage ?? exam.percentage;
-      if (typeof pct === 'number' && !Number.isNaN(pct)) {
-        total += pct;
-        count += 1;
-      } else if (exam.subjects && Array.isArray(exam.subjects)) {
-        (exam.subjects as Record<string, unknown>[]).forEach((s) => {
-          const sp = s.percentage;
-          if (typeof sp === 'number' && !Number.isNaN(sp)) {
-            total += sp;
-            count += 1;
-          }
-        });
-      }
-    });
-    if (count === 0) return undefined;
-    return Math.round(total / count);
-  }, [marksData]);
+  const { data: homeReceiptsRaw, refetch: refetchHomeReceipts, isLoading: loadingHomeReceipts } = useQuery({
+    queryKey: ['student', 'home', 'fees', 'receipts', schoolCode, studentId, student?.admission_no],
+    queryFn: async () => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return [];
+      const r = await studentService.getFeeReceipts({ school_code: schoolCode, student_id: effectiveId });
+      const body = (r as { data?: unknown })?.data ?? r;
+      const list = Array.isArray(body) ? body : (body as { data?: unknown[] })?.data ?? [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: canFetchHomeExtras,
+    staleTime: 60 * 1000,
+  });
+
+  type TransportHomePayload = {
+    has_transport?: boolean;
+    route?: string | { name?: string };
+    route_name?: string;
+  };
+
+  const { data: homeTransportRaw, refetch: refetchHomeTransport, isLoading: loadingHomeTransport } = useQuery({
+    queryKey: ['student', 'home', 'transport', schoolCode, studentId, student?.admission_no],
+    queryFn: async (): Promise<TransportHomePayload> => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return { has_transport: false };
+      const r = await studentService.getTransport({ school_code: schoolCode, student_id: effectiveId });
+      const api = (r as { data?: { data?: TransportHomePayload; has_transport?: boolean } }).data;
+      const payload = api?.data ?? api ?? (r as unknown as TransportHomePayload);
+      return (payload ?? { has_transport: false }) as TransportHomePayload;
+    },
+    enabled: canFetchHomeExtras,
+    staleTime: 60 * 1000,
+  });
+
+  const { monthTotal: feesMonthTotal, quarterTotal: feesQuarterTotal } = useMemo(
+    () => sumFeesDueInMonthAndQuarter(Array.isArray(homeFeesRaw) ? homeFeesRaw : [], new Date()),
+    [homeFeesRaw]
+  );
+
+  const receiptCount = useMemo(
+    () => countActiveReceipts(Array.isArray(homeReceiptsRaw) ? homeReceiptsRaw : []),
+    [homeReceiptsRaw]
+  );
+
+  const { transportRouteLabel, transportAssigned } = useMemo(() => {
+    const info = homeTransportRaw ?? {};
+    const hasTransport =
+      info.has_transport === true ||
+      Boolean(info.route || info.route_name || (info as { stops?: unknown[] }).stops);
+    if (!hasTransport) return { transportRouteLabel: 'No transport assigned', transportAssigned: false };
+    const r = info.route ?? info.route_name;
+    if (typeof r === 'string' && r.trim()) return { transportRouteLabel: r.trim(), transportAssigned: true };
+    if (r && typeof r === 'object' && typeof (r as { name?: string }).name === 'string') {
+      const n = (r as { name: string }).name.trim();
+      if (n) return { transportRouteLabel: n, transportAssigned: true };
+    }
+    if (typeof info.route_name === 'string' && info.route_name.trim()) {
+      return { transportRouteLabel: info.route_name.trim(), transportAssigned: true };
+    }
+    return { transportRouteLabel: 'Route', transportAssigned: true };
+  }, [homeTransportRaw]);
 
   const { data: attendanceData, refetch: refetchAttendance } = useQuery({
     queryKey: ['student', 'attendance', 'overall', schoolCode, studentId, student?.admission_no],
@@ -279,7 +348,18 @@ export default function StudentDashboardHomeScreen() {
     refetchNotices();
     refetchUpcoming();
     refetchAttendance();
-  }, [refetch, refetchNotices, refetchUpcoming, refetchAttendance]);
+    refetchHomeFees();
+    refetchHomeReceipts();
+    refetchHomeTransport();
+  }, [
+    refetch,
+    refetchNotices,
+    refetchUpcoming,
+    refetchAttendance,
+    refetchHomeFees,
+    refetchHomeReceipts,
+    refetchHomeTransport,
+  ]);
 
   const handleModulePress = useCallback(
     (modulePath: string) => {
@@ -291,13 +371,11 @@ export default function StudentDashboardHomeScreen() {
   if (isLoading && !stats) {
     return (
       <View style={styles.root}>
-        <DashboardHeader studentName={fullName} classSection={classSection} />
+        <DashboardHeader studentName={fullName} />
         <LoadingSkeleton />
       </View>
     );
   }
-
-  const hasPendingFees = Number(stats?.pending_fees_count ?? 0) > 0;
 
   return (
     <View style={styles.root}>
@@ -316,7 +394,6 @@ export default function StudentDashboardHomeScreen() {
         <Container>
           <DashboardHeader
             studentName={fullName}
-            classSection={classSection}
             onMessagesPress={() => handleModulePress('communication')}
             onNotificationPress={() => {}}
             onProfilePress={() => (navigation as { navigate: (name: string) => void }).navigate('profile')}
@@ -324,16 +401,24 @@ export default function StudentDashboardHomeScreen() {
         </Container>
 
         <Container>
-          <HeroMetricsSection
-            attendancePercent={overallAttendancePercent ?? stats?.attendance_percent ?? 0}
-            marksPercent={marksAveragePercent ?? 0}
-            upcomingExamsCount={stats?.upcoming_exams_count ?? 0}
-            pendingFeesCount={stats?.pending_fees_count ?? '—'}
-            hasPendingFees={hasPendingFees}
-            onViewAttendance={() => handleModulePress('attendance')}
-            onViewMarks={() => handleModulePress('marks')}
-            onUpcomingExams={() => handleModulePress('examinations')}
-            onPendingFees={() => handleModulePress('fees')}
+          <DashboardHomeGrid
+            attendancePercent={overallAttendancePercent ?? stats?.attendance_percent ?? '—'}
+            classLabel={classTeacherCard.classLabel}
+            sectionLabel={classTeacherCard.sectionLabel}
+            teacherName={classTeacherCard.teacherName}
+            teacherDesignation={classTeacherCard.teacherDesignation}
+            classTeacherLoading={classTeacherCard.isLoading}
+            feesMonthTotal={feesMonthTotal}
+            feesQuarterTotal={feesQuarterTotal}
+            receiptCount={receiptCount}
+            feesLoading={loadingHomeFees || loadingHomeReceipts}
+            routeName={transportRouteLabel}
+            transportActive={transportAssigned}
+            transportLoading={loadingHomeTransport}
+            onPressAttendance={() => handleModulePress('attendance')}
+            onPressMyClass={() => handleModulePress('class')}
+            onPressFees={() => handleModulePress('fees')}
+            onPressTransport={() => handleModulePress('transport')}
           />
         </Container>
 
@@ -398,7 +483,7 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: {
-    paddingTop: s.sm,
+    paddingTop: s.lg,
     paddingBottom: s['3xl'],
   },
   bottomPad: { height: 100 },

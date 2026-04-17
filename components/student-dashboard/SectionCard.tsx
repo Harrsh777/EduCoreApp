@@ -4,16 +4,14 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewProps } from 'react-native';
-import { studentDashboardTheme } from '@/theme/studentDashboard';
+import { studentDashboardTheme, studentDashboardCardStyle } from '@/theme/studentDashboard';
 import { textStyles } from '@/theme/typography';
-import { spacing } from '@/theme/spacing';
 
-const { colors, cardRadius, cardPadding, webSolid, spacing: s } = studentDashboardTheme;
+const { colors, cardPadding, spacing: s } = studentDashboardTheme;
 
 type SectionCardProps = ViewProps & {
   title: string;
   children: React.ReactNode;
-  /** 3 = three-column grid for Academics */
   gridColumns?: 2 | 3;
 };
 
@@ -39,17 +37,16 @@ export function SectionCard({ title, children, gridColumns, style, ...rest }: Se
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginHorizontal: s.lg, marginBottom: s['2xl'] },
+  wrap: { marginHorizontal: s.xl, marginBottom: s['3xl'] },
   card: {
+    ...studentDashboardCardStyle,
     backgroundColor: colors.surface,
-    borderRadius: cardRadius,
     padding: cardPadding,
-    borderWidth: 1,
-    borderColor: webSolid.borderCard,
   },
   title: {
     ...textStyles.h4,
-    color: colors.textPrimary,
+    fontWeight: '700',
+    color: colors.primaryBright,
     marginBottom: s.lg,
   },
   grid: {

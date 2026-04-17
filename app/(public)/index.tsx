@@ -208,7 +208,7 @@ export default function OnboardingScreen() {
             <Text style={styles.titleItalic}>Learning{'\n'}Journey!</Text>
           </Text>
           <Text style={styles.subtitle}>
-            Making learning easy and fun — reach your goals with guided, personalised study sessions.
+            Making learning easy and fun, reach your goals with personalised study sessions.
           </Text>
         </Animated.View>
 
@@ -247,12 +247,12 @@ export default function OnboardingScreen() {
               ]}
               {...panResponder.panHandlers}
             >
-              <LinearGradient
-                colors={[C.primary, C.primaryLight]}
-                style={styles.thumbGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
+            <LinearGradient
+  colors={['#FFFFFF', '#F3EEFF', '#E9EFFF', '#EEF2FF']}
+  start={{ x: 0, y: 0 }}
+  end={{ x: 1, y: 1 }}
+  style={styles.container}
+>
                 <Text style={styles.thumbArrow}>›</Text>
               </LinearGradient>
             </Animated.View>

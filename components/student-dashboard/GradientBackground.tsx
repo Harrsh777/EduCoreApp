@@ -1,8 +1,8 @@
 /**
- * Gradient background for student dashboard (header / cards).
+ * Full-screen / header wash — lavender → blush → sky (student dashboard).
  */
 
-import { View, StyleSheet, type ViewProps } from 'react-native';
+import { StyleSheet, type ViewProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { studentDashboardTheme } from '@/theme/studentDashboard';
 
@@ -19,14 +19,14 @@ export function GradientBackground({
   children,
   ...rest
 }: GradientBackgroundProps) {
-  const isCard = variant === 'card';
-  const colorsGradient = isCard
-    ? ['rgba(30, 144, 255, 0.15)', 'rgba(0, 82, 212, 0.08)'] as const
-    : [colors.primaryBg, colors.secondarySurface] as const;
+  const gradientColors =
+    variant === 'card'
+      ? (['#FFFFFF', colors.backgroundSecondary] as const)
+      : (['#FAF5FF', '#FDF2F8', '#E0F2FE'] as const);
 
   return (
     <LinearGradient
-      colors={colorsGradient}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[variant === 'full' ? styles.full : styles.header, style]}

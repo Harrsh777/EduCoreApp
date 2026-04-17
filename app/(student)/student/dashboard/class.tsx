@@ -34,14 +34,14 @@ import {
   View,
 } from 'react-native';
 
-const PRIMARY = '#2D62FF';
-const BG_START = '#F6F9FF';
+const PRIMARY = '#6D28D9';
+const BG_START = '#FAF5FF';
 const BG_END = '#FFFFFF';
-const CARD_BG = '#FFFFFF';
-const BORDER = '#EEF2F7';
-const TEXT = '#1E293B';
+const CARD_BG = 'rgba(255,255,255,0.85)';
+const BORDER = 'rgba(0,0,0,0.06)';
+const TEXT = '#1F2937';
 const MUTED = '#64748B';
-const RADIUS = 22;
+const RADIUS = 20;
 const RADIUS_SM = 16;
 const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
 
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timeHeader: {
-    backgroundColor: '#F8FAFF',
+    backgroundColor: '#ECEDED',
     width: 88,
     minWidth: 88,
   },
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   timeCell: {
-    backgroundColor: '#F8FAFF',
+    backgroundColor: '#ECEDED',
     width: 88,
     minWidth: 88,
   },

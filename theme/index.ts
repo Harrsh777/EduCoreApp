@@ -9,4 +9,8 @@ export {
   textStyles,
   type Typography,
 } from './typography';
-export { studentDashboardTheme, type StudentDashboardTheme } from './studentDashboard';
+export {
+  studentDashboardTheme,
+  studentDashboardCardStyle,
+  type StudentDashboardTheme,
+} from './studentDashboard';

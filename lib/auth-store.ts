@@ -13,7 +13,7 @@ const sessionStorage = {
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       return AsyncStorage.getItem(key);
     }
-    const SecureStore = require('expo-secure-store').default;
+    const SecureStore = require('expo-secure-store');
     return SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
@@ -22,7 +22,7 @@ const sessionStorage = {
       await AsyncStorage.setItem(key, value);
       return;
     }
-    const SecureStore = require('expo-secure-store').default;
+    const SecureStore = require('expo-secure-store');
     await SecureStore.setItemAsync(key, value);
   },
   async removeItem(key: string): Promise<void> {
@@ -31,7 +31,7 @@ const sessionStorage = {
       await AsyncStorage.removeItem(key);
       return;
     }
-    const SecureStore = require('expo-secure-store').default;
+    const SecureStore = require('expo-secure-store');
     await SecureStore.deleteItemAsync(key);
   },
 };

@@ -1,6 +1,6 @@
-import { Tabs } from 'expo-router';
-import { RoleGuard } from '@/lib/role-guard';
 import { useTheme } from '@/hooks/useTheme';
+import { RoleGuard } from '@/lib/role-guard';
+import { Tabs } from 'expo-router';
 
 export default function AdminTabsLayout() {
   const { colors: c } = useTheme();

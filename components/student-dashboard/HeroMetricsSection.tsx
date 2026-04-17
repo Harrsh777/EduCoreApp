@@ -203,12 +203,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
   },
-  pressed: { opacity: 0.85 },
+  pressed: { transform: [{ scale: 0.97 }] },
   dueBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: '#FF4D4F20',
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
   },
   dueBadgeText: {
     fontSize: 10,

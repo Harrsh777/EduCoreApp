@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
-import React from 'react';
+import { Href, Link } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   Pressable,
   StyleSheet,
   Text,
@@ -10,199 +10,272 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const PRIMARY = '#7C3AED';
-const SECONDARY = '#F472B6';
+/* ---------------- DESIGN SYSTEM ---------------- */
+
+const COLORS = {
+  background: '#FAF8F5',
+  card: '#FFFFFF',
+  primary: '#7C5CFA',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#6B6B6B',
+  studentBg: '#EEF4FF',
+  staffBg: '#FDECF1',
+};
+
+const SPACING = {
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 40,
+};
+
+/* ---------------- TYPES ---------------- */
+
+type LoginOptionCardProps = {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  bg: string;
+  href: Href;
+};
+
+/* ---------------- MAIN SCREEN ---------------- */
 
 export default function LoginHubScreen() {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   return (
-    <LinearGradient
-      colors={['#F5F3FF', '#EFF6FF']}
-      style={styles.root}
-    >
-      <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+
+        {/* SUBTLE BACKGROUND BLOB */}
+        <View style={styles.blob} />
 
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.logo}>
-            <Ionicons name="school" size={20} color="#fff" />
+            <Ionicons name="school" size={18} color="#fff" />
           </View>
           <Text style={styles.brand}>EduCore</Text>
         </View>
 
-        {/* TITLE */}
-        <View style={styles.titleWrap}>
-          <Text style={styles.title}>
-            Welcome Back 👋
-          </Text>
+        {/* WELCOME */}
+        <View style={styles.welcome}>
+          <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
-            Choose your role to continue
+            Choose how you want to login
           </Text>
         </View>
 
-        {/* MAIN BOX */}
-        <View style={styles.roleBox}>
+        {/* LOGIN CONTAINER */}
+        <Animated.View
+          style={[
+            styles.loginContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY }],
+            },
+          ]}
+        >
+          <LoginOptionCard
+            title="Login as Student"
+            icon="person"
+            bg={COLORS.studentBg}
+            href="/student/login"
+          />
 
-          {/* STUDENT */}
-          <Link href="/student/login" asChild>
-            <Pressable style={({ pressed }) => [
-              styles.roleCard,
-              { backgroundColor: '#EEF2FF' },
-              pressed && styles.pressed
-            ]}>
-              <View style={[styles.iconWrap, { backgroundColor: '#C7D2FE' }]}>
-                <Ionicons name="person" size={22} color={PRIMARY} />
-              </View>
-
-              <Text style={styles.roleTitle}>Student</Text>
-              <Text style={styles.roleDesc}>
-                Access classes & grades
-              </Text>
-            </Pressable>
-          </Link>
-
-          {/* STAFF */}
-          <Link href="/staff/login" asChild>
-            <Pressable style={({ pressed }) => [
-              styles.roleCard,
-              { backgroundColor: '#FCE7F3' },
-              pressed && styles.pressed
-            ]}>
-              <View style={[styles.iconWrap, { backgroundColor: '#FBCFE8' }]}>
-                <Ionicons name="briefcase" size={22} color={SECONDARY} />
-              </View>
-
-              <Text style={styles.roleTitle}>Staff</Text>
-              <Text style={styles.roleDesc}>
-                Manage classes & tools
-              </Text>
-            </Pressable>
-          </Link>
-
-        </View>
+          <LoginOptionCard
+            title="Login as Staff"
+            icon="briefcase"
+            bg={COLORS.staffBg}
+            href="/staff/login"
+          />
+        </Animated.View>
 
         {/* FOOTER */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Need help?
-          </Text>
-          <Text style={styles.link}>
-            Contact support
-          </Text>
+          <Text style={styles.footerText}>Need help?</Text>
+          <Text style={styles.link}>Contact support</Text>
         </View>
 
-      </SafeAreaView>
-    </LinearGradient>
+      </View>
+    </SafeAreaView>
   );
 }
 
+/* ---------------- REUSABLE CARD ---------------- */
+
+function LoginOptionCard({
+  title,
+  icon,
+  bg,
+  href,
+}: LoginOptionCardProps) {
+  return (
+    <Link href={href} asChild>
+      <Pressable
+        style={({ pressed }) => [
+          styles.optionCard,
+          { backgroundColor: bg },
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.iconContainer}>
+          <Ionicons name={icon} size={20} color="#333" />
+        </View>
+
+        <Text numberOfLines={1} style={styles.optionText}>
+          {title}
+        </Text>
+      </Pressable>
+    </Link>
+  );
+}
+
+/* ---------------- STYLES ---------------- */
+
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
+    backgroundColor: COLORS.background,
   },
 
-  safe: {
+  container: {
     flex: 1,
     paddingHorizontal: 20,
     justifyContent: 'space-between',
-    paddingBottom: 30,
   },
 
+  /* BACKGROUND BLOB */
+  blob: {
+    position: 'absolute',
+    top: -80,
+    left: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 200,
+    backgroundColor: 'rgba(124,92,250,0.08)',
+  },
+
+  /* HEADER */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: SPACING.lg,
+    gap: SPACING.sm,
   },
 
   logo: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: PRIMARY,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
   },
 
   brand: {
+    fontSize: 20,
     fontFamily: 'PlayfairBold',
-    fontSize: 22,
-    color: '#1F2937',
+    color: COLORS.textPrimary,
   },
 
-  titleWrap: {
-    marginTop: 40,
+  /* WELCOME */
+  welcome: {
+    marginTop: SPACING.xl,
   },
 
   title: {
-    fontFamily: 'PlayfairBold',
     fontSize: 30,
-    color: '#111827',
-    marginBottom: 6,
+    fontFamily: 'PlayfairBold',
+    color: COLORS.textPrimary,
   },
 
   subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
+    marginTop: SPACING.xs,
+    fontSize: 14,
+    fontFamily: 'Inter',
+    color: COLORS.textSecondary,
   },
 
-  roleBox: {
+  /* LOGIN CONTAINER (KEY GROUPING FIX) */
+  loginContainer: {
+    marginTop: SPACING.xl,
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: SPACING.md,
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 30,
-  },
-
-  roleCard: {
-    flex: 1,
-    borderRadius: 20,
-    paddingVertical: 26,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-
+    gap: SPACING.sm,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
-  iconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    justifyContent: 'center',
+  /* OPTION CARD */
+  optionCard: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 20,
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    minHeight: 100, // ensures good tap area
   },
 
-  roleTitle: {
-    fontFamily: 'PlayfairBold',
-    fontSize: 18,
-    color: '#111827',
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
   },
 
-  roleDesc: {
-    fontSize: 13,
-    color: '#6B7280',
+  optionText: {
+    fontSize: 14,
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: 4,
+    color: COLORS.textPrimary,
   },
 
+  /* FOOTER */
   footer: {
     alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
 
   footerText: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
 
   link: {
-    marginTop: 6,
+    marginTop: SPACING.xs,
     fontSize: 14,
     fontWeight: '600',
-    color: PRIMARY,
+    color: COLORS.primary,
   },
 
+  /* INTERACTION */
   pressed: {
     transform: [{ scale: 0.96 }],
+    opacity: 0.9,
   },
 });

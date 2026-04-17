@@ -1,8 +1,6 @@
 /**
- * StudentApplyLeaveScreen — light white + blue scheme.
- * Airy, premium feel. Custom calendar date picker. No external deps.
- *
- * Blur-safe: no LinearGradient, no BlurView, no rgba backgrounds, all solid hex.
+ * Student apply leave — matches student dashboard tokens (warm base, navy, teal hints).
+ * Custom calendar date picker.
  */
 
 import { useStudent } from '@/lib/student-context';
@@ -25,21 +23,21 @@ import {
   View,
 } from 'react-native';
 
-// ─── Tokens — light white + blue ─────────────────────────────────────────────
+// ─── Tokens — student dashboard (warm base, navy, teal accents) ─────────────
 const P = {
-  pageBg:      '#F0F5FF',   // soft blue-tinted white page
-  cardBg:      '#FFFFFF',   // pure white cards
-  cardBorder:  '#DBEAFE',   // light blue border
-  blue:        '#2563EB',   // vivid blue CTA
-  blueDeep:    '#1E40AF',   // pressed / dark blue
-  blueSubtle:  '#EFF6FF',   // very light blue tint (active bg)
-  blueMid:     '#BFDBFE',   // medium blue (dots, dividers)
-  textPrimary: '#0F172A',   // near-black headings
-  textMid:     '#475569',   // secondary labels
-  textDim:     '#94A3B8',   // placeholder / muted
-  inputBg:     '#F8FAFF',   // barely-blue input bg
-  green:       '#16A34A',
-  shadow:      '#C7D9F5',   // shadow color on light bg
+  pageBg:      '#FAF5FF',
+  cardBg:      'rgba(255,255,255,0.92)',
+  cardBorder:  'rgba(109, 40, 217, 0.18)',
+  blue:        '#6D28D9',
+  blueDeep:    '#5B21B6',
+  blueSubtle:  '#EDE9FE',
+  blueMid:     'rgba(236, 72, 153, 0.35)',
+  textPrimary: '#312E81',
+  textMid:     '#64748B',
+  textDim:     '#64748B',
+  inputBg:     '#ECEDED',
+  green:       '#22C55E',
+  shadow:      'rgba(0,0,0,0.08)',
 };
 
 // ─── Calendar helpers ─────────────────────────────────────────────────────────

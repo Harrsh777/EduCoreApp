@@ -1,13 +1,13 @@
 /**
- * Rounded module button: circular icon + plain text label (no typography spread).
+ * Module tile — rotating pastel icon circles (violet, pink, cyan, amber, emerald, rose).
  */
 
-import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
+import { Pressable, Text, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { studentDashboardTheme } from '@/theme/studentDashboard';
+import { getStudentModulePalette, studentDashboardTheme, studentDashboardCardStyle } from '@/theme/studentDashboard';
 import { spacing } from '@/theme/spacing';
 
-const { colors, cardRadius, cardRadiusLg, minTouchHeight, webSolid } = studentDashboardTheme;
+const { colors, cardRadiusLg, minTouchHeight } = studentDashboardTheme;
 
 type ModuleButtonProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -16,6 +16,8 @@ type ModuleButtonProps = {
 };
 
 export function ModuleButton({ icon, label, onPress }: ModuleButtonProps) {
+  const { iconBg, icon: iconColor } = getStudentModulePalette(label);
+
   return (
     <Pressable
       onPress={onPress}
@@ -23,10 +25,10 @@ export function ModuleButton({ icon, label, onPress }: ModuleButtonProps) {
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={24} color={colors.highlight} />
+      <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={24} color={iconColor} />
       </View>
-      <Text style={[styles.label, Platform.OS === 'web' && styles.labelWeb]} numberOfLines={2}>
+      <Text style={styles.label} numberOfLines={2}>
         {label}
       </Text>
     </Pressable>
@@ -35,23 +37,23 @@ export function ModuleButton({ icon, label, onPress }: ModuleButtonProps) {
 
 const styles = StyleSheet.create({
   wrap: {
+    ...studentDashboardCardStyle,
     minHeight: minTouchHeight + 36,
     alignItems: 'center',
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[2],
-    borderRadius: cardRadiusLg ?? 24,
-    backgroundColor: webSolid.accentPressed,
-    borderWidth: 1,
-    borderColor: webSolid.borderCard,
+    borderRadius: cardRadiusLg,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   pressed: {
-    backgroundColor: webSolid.accentMuted,
+    transform: [{ scale: 0.97 }],
+    opacity: 0.96,
   },
   iconCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[2],
@@ -60,18 +62,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
-    color: '#1E293B',
+    color: colors.textPrimary,
     textAlign: 'center',
-    textShadowColor: 'transparent',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 0,
   },
-  labelWeb: Platform.OS === 'web'
-    ? {
-        // @ts-expect-error - web-only, crisp text
-        WebkitFontSmoothing: 'antialiased',
-        // @ts-expect-error - web-only
-        MozOsxFontSmoothing: 'grayscale',
-      }
-    : {},
 });

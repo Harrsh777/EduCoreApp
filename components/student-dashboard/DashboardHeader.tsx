@@ -1,13 +1,13 @@
 /**
- * Student dashboard header: greeting + class pill on left, messages + notifications + avatar on right.
- * Matches design: "Good Morning, Name 👋", "Class 10 • Sec A" pill, profile with green dot on right.
+ * Student dashboard header — soft multi-stop gradient, colourful pill, violet actions.
  */
 
-import { studentDashboardTheme } from '@/theme/studentDashboard';
+import { studentDashboardTheme, studentDashboardCardStyle } from '@/theme/studentDashboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-const { colors, spacing: s, cardRadius } = studentDashboardTheme;
+const { colors, spacing: s } = studentDashboardTheme;
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -24,7 +24,6 @@ function getGreeting(): string {
 
 type DashboardHeaderProps = {
   studentName: string;
-  classSection: string;
   onNotificationPress?: () => void;
   onMessagesPress?: () => void;
   onProfilePress?: () => void;
@@ -33,59 +32,68 @@ type DashboardHeaderProps = {
 
 export function DashboardHeader({
   studentName,
-  classSection,
   onNotificationPress,
   onMessagesPress,
   onProfilePress,
 }: DashboardHeaderProps) {
   const greeting = getGreeting();
   const displayName = studentName || 'Student';
+  const radius = studentDashboardTheme.cardRadius;
 
   return (
     <View style={styles.wrap}>
-      <View style={[StyleSheet.absoluteFill, styles.bg]} />
+      <LinearGradient
+        colors={[...colors.headerGradient]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+      />
+      <View style={[StyleSheet.absoluteFill, styles.glossBorder, { borderRadius: radius }]} />
       <View style={styles.row}>
         <View style={styles.greetingWrap}>
-          <Text style={styles.greeting} numberOfLines={1}>
-            {greeting}, {displayName} 👋
+          <Text style={styles.greeting} numberOfLines={2}>
+            {greeting},{' '}
+            <Text style={styles.greetingName}>{displayName}</Text>
           </Text>
-          {classSection ? (
-            <View style={styles.classPill}>
-              <Text style={styles.classPillText} numberOfLines={1}>
-            {classSection.includes(' • ') ? `Class ${classSection.split(' • ')[0]} • Sec ${classSection.split(' • ')[1] ?? ''}` : classSection ? `Class ${classSection}` : classSection}
-          </Text>
-            </View>
-          ) : null}
         </View>
 
         <View style={styles.rightRow}>
-          {onMessagesPress && (
+          {onMessagesPress ? (
             <Pressable
               onPress={onMessagesPress}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconPressed]}
               accessibilityLabel="Messages"
             >
-              <Ionicons name="chatbubble-outline" size={22} color={colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={22} color={colors.primaryBright} />
             </Pressable>
-          )}
-          <Pressable
-            onPress={onNotificationPress}
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-            accessibilityLabel="Notifications"
-          >
-            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
-            <View style={styles.notifBadge} />
-          </Pressable>
-          <Pressable
-            onPress={onProfilePress}
-            style={({ pressed }) => [styles.avatarWrap, pressed && styles.pressed]}
-            accessibilityLabel="Open profile"
-          >
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-            </View>
-            <View style={styles.onlineDot} />
-          </Pressable>
+          ) : null}
+          {onNotificationPress ? (
+            <Pressable
+              onPress={onNotificationPress}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconPressed]}
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.primaryBright} />
+              <View style={styles.notifBadge} />
+            </Pressable>
+          ) : null}
+          {onProfilePress ? (
+            <Pressable
+              onPress={onProfilePress}
+              style={({ pressed }) => [styles.avatarWrap, pressed && styles.iconPressed]}
+              accessibilityLabel="Open profile"
+            >
+              <LinearGradient
+                colors={['#A78BFA', '#EC4899']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarGradient}
+              >
+                <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
+              </LinearGradient>
+              <View style={styles.onlineDot} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>
@@ -94,65 +102,64 @@ export function DashboardHeader({
 
 const styles = StyleSheet.create({
   wrap: {
-    borderRadius: cardRadius,
+    borderRadius: studentDashboardTheme.cardRadius,
     overflow: 'hidden',
-    marginHorizontal: s.lg,
-    marginBottom: s.xl,
+    marginHorizontal: s.xl,
+    marginBottom: s['2xl'],
+    ...studentDashboardCardStyle,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    shadowOpacity: 0.08,
   },
-  bg: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: cardRadius,
+  glossBorder: {
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.65)',
+    pointerEvents: 'none',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: s.xl,
-    paddingHorizontal: s.xl,
+    paddingVertical: s.lg,
+    paddingHorizontal: s.lg,
   },
   greetingWrap: { flex: 1, minWidth: 0, marginRight: s.md },
   greeting: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  classPill: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: colors.primaryLight,
-  },
-  classPillText: {
-    fontSize: 13,
+    fontSize: 20,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  greetingName: {
+    color: colors.primaryBright,
+    fontWeight: '700',
   },
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: s.sm },
   iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.primaryLight,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(109, 40, 217, 0.12)',
   },
+  iconPressed: { transform: [{ scale: 0.97 }] },
   avatarWrap: { position: 'relative' },
-  avatarCircle: {
+  avatarGradient: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   avatarText: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#FFFFFF',
   },
   onlineDot: {
     position: 'absolute',
@@ -163,9 +170,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: colors.surface,
+    borderColor: '#FFFFFF',
   },
-  pressed: { opacity: 0.8 },
   notifBadge: {
     position: 'absolute',
     top: 8,

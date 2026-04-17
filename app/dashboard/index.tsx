@@ -1,5 +1,6 @@
 /**
- * /dashboard with no schoolCode: redirect to /dashboard/:schoolCode from store or to admin login.
+ * /dashboard with no schoolCode: redirect admins to their dashboard,
+ * otherwise route to the main public login hub.
  */
 
 import { Redirect } from 'expo-router';
@@ -12,5 +13,5 @@ export default function DashboardIndexScreen() {
   if (role === 'admin' && school_code) {
     return <Redirect href={`/dashboard/${encodeURIComponent(school_code)}`} />;
   }
-  return <Redirect href="/admin/login" />;
+  return <Redirect href="/login" />;
 }

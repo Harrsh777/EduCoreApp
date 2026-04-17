@@ -23,14 +23,14 @@ import { env } from '@/lib/env';
 import { getStudentByAdmissionNo } from '@/services/school.service';
 import { studentService } from '@/services/student.service';
 
-const PRIMARY = '#2D62FF';
-const BG_START = '#F4F7FF';
+const PRIMARY = '#6D28D9';
+const BG_START = '#FAF5FF';
 const BG_END = '#FFFFFF';
-const CARD_BG = '#FFFFFF';
-const BORDER = '#E8ECF4';
-const TEXT = '#1E293B';
+const CARD_BG = 'rgba(255,255,255,0.85)';
+const BORDER = 'rgba(0,0,0,0.06)';
+const TEXT = '#1F2937';
 const MUTED = '#64748B';
-const RADIUS = 22;
+const RADIUS = 20;
 const RADIUS_SM = 16;
 const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
 

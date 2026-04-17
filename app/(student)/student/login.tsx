@@ -59,9 +59,7 @@ export default function StudentLoginScreen() {
                 <Text style={styles.logoText}>EduCore</Text>
               </View>
 
-              <Pressable onPress={() => router.push('/demo')}>
-                <Text style={styles.demoLink}>Schedule a Demo</Text>
-              </Pressable>
+      
             </View>
 
             {/* MAIN CONTENT */}

@@ -1,59 +1,40 @@
 /**
- * Student Dashboard Home — crisp white + deep-blue aesthetic.
- * Blur fixes:
- *   1. Animations DISABLED on web (Animated opacity/transform blurs text on web).
- *   2. All backgrounds are solid colours — no gradient/rgba stacking.
- *   3. Shared PALETTE tokens ensure colour consistency across every component.
+ * Student Dashboard Home (alternate route) — same calm premium system as index.
+ * Animations disabled on web to avoid compositing blur on some browsers.
  */
 
 import {
   CategorySelector,
   DashboardHeader,
+  DashboardHomeGrid,
   HomeListCard,
-  HomeSummaryCard,
   LoadingSkeleton,
   ModuleButton,
   SectionCard,
-  StatCard,
   type HomeListItem,
   type HomeSegment,
 } from '@/components/student-dashboard';
 import { STUDENT_DASHBOARD_SECTIONS } from '@/constants/studentDashboardMenu';
+import { useStudentClassTeacherCard } from '@/hooks/useStudentClassTeacherCard';
+import { env } from '@/lib/env';
 import { useStudent } from '@/lib/student-context';
 import { communicationService } from '@/services/communication.service';
-import { getDashboardHomeStats, invalidateDashboardCache } from '@/services/student-dashboard.service';
+import { getStudentByAdmissionNo } from '@/services/school.service';
+import {
+  countActiveReceipts,
+  getDashboardHomeStats,
+  invalidateDashboardCache,
+  sumFeesDueInMonthAndQuarter,
+} from '@/services/student-dashboard.service';
 import { studentService } from '@/services/student.service';
+import { studentDashboardTheme } from '@/theme/studentDashboard';
 import { spacing } from '@/theme/spacing';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View
-} from 'react-native';
+import { Animated, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
-// ─── Design tokens: solid hex only on web to avoid alpha compositing / text blur ─
-export const PALETTE = {
-  pageBg:      '#060F1E',
-  cardBg:      '#0D1F3C',
-  cardBgAlt:   '#112240',
-  blue:        '#3B82F6',
-  blueDim:     '#1D4ED8',
-  blueGlow:    Platform.OS === 'web' ? '#1a2d4a' : 'rgba(59, 130, 246, 0.15)',
-  white:       '#FFFFFF',
-  whiteHi:     Platform.OS === 'web' ? '#E6E6E6' : 'rgba(255,255,255,0.90)',
-  whiteMid:    Platform.OS === 'web' ? '#8C8C8C' : 'rgba(255,255,255,0.55)',
-  whiteDim:    Platform.OS === 'web' ? '#404040' : 'rgba(255,255,255,0.25)',
-  borderSubtle: Platform.OS === 'web' ? '#1a2330' : 'rgba(255,255,255,0.07)',
-  borderBlue:   Platform.OS === 'web' ? '#2563eb' : 'rgba(59,130,246,0.35)',
-  green:       '#22C55E',
-  amber:       '#F59E0B',
-};
+const { colors } = studentDashboardTheme;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const maybeAnimate = Platform.OS !== 'web'; // NO animation on web → no blur
@@ -70,8 +51,19 @@ export default function StudentDashboardHomeScreen() {
   const { student, schoolCode, path } = useStudent();
 
   const studentId    = student?.id ?? '';
-  const fullName     = student?.full_name ?? (student as { name?: string })?.name ?? 'Student';
-  const classSection = [student?.class, student?.section].filter(Boolean).join(' • ') || '';
+  const studentRecord = (student ?? {}) as {
+    full_name?: string;
+    name?: string;
+    student_name?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  const fullName =
+    studentRecord.full_name?.trim() ||
+    studentRecord.name?.trim() ||
+    studentRecord.student_name?.trim() ||
+    [studentRecord.first_name, studentRecord.last_name].filter(Boolean).join(' ').trim() ||
+    'Student';
 
   const [segment, setSegment] = useState<HomeSegment>('today');
   const fadeAnim  = useRef(new Animated.Value(maybeAnimate ? 0 : 1)).current;
@@ -110,6 +102,102 @@ export default function StudentDashboardHomeScreen() {
     staleTime: 60_000,
   });
 
+  const classTeacherCard = useStudentClassTeacherCard();
+  const canFetchHomeExtras = Boolean(
+    schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no))
+  );
+
+  async function resolveEffectiveStudentId(): Promise<string> {
+    let effectiveId = studentId;
+    if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
+      try {
+        const r = await getStudentByAdmissionNo(schoolCode, student.admission_no);
+        const row = (r as { data?: { id?: string } })?.data;
+        if (row?.id) effectiveId = String(row.id);
+      } catch {
+        /* keep studentId */
+      }
+    }
+    return effectiveId;
+  }
+
+  const { data: homeFeesRaw, refetch: refetchHomeFees, isLoading: loadingHomeFees } = useQuery({
+    queryKey: ['student', 'home', 'fees', schoolCode, studentId, student?.admission_no],
+    queryFn: async () => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return [];
+      const r = await studentService.getFees({ school_code: schoolCode, student_id: effectiveId });
+      const body = (r as { data?: unknown })?.data ?? r;
+      const list = Array.isArray(body) ? body : (body as { data?: unknown[] })?.data ?? (body as { fees?: unknown[] })?.fees ?? [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: canFetchHomeExtras,
+    staleTime: 60_000,
+  });
+
+  const { data: homeReceiptsRaw, refetch: refetchHomeReceipts, isLoading: loadingHomeReceipts } = useQuery({
+    queryKey: ['student', 'home', 'fees', 'receipts', schoolCode, studentId, student?.admission_no],
+    queryFn: async () => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return [];
+      const r = await studentService.getFeeReceipts({ school_code: schoolCode, student_id: effectiveId });
+      const body = (r as { data?: unknown })?.data ?? r;
+      const list = Array.isArray(body) ? body : (body as { data?: unknown[] })?.data ?? [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: canFetchHomeExtras,
+    staleTime: 60_000,
+  });
+
+  type TransportHomePayload = {
+    has_transport?: boolean;
+    route?: string | { name?: string };
+    route_name?: string;
+    stops?: unknown[];
+  };
+
+  const { data: homeTransportRaw, refetch: refetchHomeTransport, isLoading: loadingHomeTransport } = useQuery({
+    queryKey: ['student', 'home', 'transport', schoolCode, studentId, student?.admission_no],
+    queryFn: async (): Promise<TransportHomePayload> => {
+      const effectiveId = await resolveEffectiveStudentId();
+      if (!effectiveId) return { has_transport: false };
+      const r = await studentService.getTransport({ school_code: schoolCode, student_id: effectiveId });
+      const api = (r as { data?: { data?: TransportHomePayload; has_transport?: boolean } }).data;
+      const payload = api?.data ?? api ?? (r as unknown as TransportHomePayload);
+      return (payload ?? { has_transport: false }) as TransportHomePayload;
+    },
+    enabled: canFetchHomeExtras,
+    staleTime: 60_000,
+  });
+
+  const { monthTotal: feesMonthTotal, quarterTotal: feesQuarterTotal } = useMemo(
+    () => sumFeesDueInMonthAndQuarter(Array.isArray(homeFeesRaw) ? homeFeesRaw : [], new Date()),
+    [homeFeesRaw]
+  );
+
+  const receiptCount = useMemo(
+    () => countActiveReceipts(Array.isArray(homeReceiptsRaw) ? homeReceiptsRaw : []),
+    [homeReceiptsRaw]
+  );
+
+  const { transportRouteLabel, transportAssigned } = useMemo(() => {
+    const info = homeTransportRaw ?? {};
+    const hasTransport =
+      info.has_transport === true ||
+      Boolean(info.route || info.route_name || (Array.isArray(info.stops) && info.stops.length > 0));
+    if (!hasTransport) return { transportRouteLabel: 'No transport assigned', transportAssigned: false };
+    const r = info.route ?? info.route_name;
+    if (typeof r === 'string' && r.trim()) return { transportRouteLabel: r.trim(), transportAssigned: true };
+    if (r && typeof r === 'object' && typeof (r as { name?: string }).name === 'string') {
+      const n = (r as { name: string }).name.trim();
+      if (n) return { transportRouteLabel: n, transportAssigned: true };
+    }
+    if (typeof info.route_name === 'string' && info.route_name.trim()) {
+      return { transportRouteLabel: info.route_name.trim(), transportAssigned: true };
+    }
+    return { transportRouteLabel: 'Route', transportAssigned: true };
+  }, [homeTransportRaw]);
+
   const listItems = useMemo((): HomeListItem[] => {
     const notices  = noticesData?.data;
     const upcoming = upcomingData?.data;
@@ -135,25 +223,24 @@ export default function StudentDashboardHomeScreen() {
 
   const onRefresh = useCallback(() => {
     invalidateDashboardCache();
-    refetch(); refetchNotices(); refetchUpcoming();
-  }, [refetch, refetchNotices, refetchUpcoming]);
+    refetch();
+    refetchNotices();
+    refetchUpcoming();
+    refetchHomeFees();
+    refetchHomeReceipts();
+    refetchHomeTransport();
+  }, [refetch, refetchNotices, refetchUpcoming, refetchHomeFees, refetchHomeReceipts, refetchHomeTransport]);
 
   const handleModulePress = useCallback(
     (modulePath: string) => router.push(path(modulePath) as never),
     [path, router],
   );
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const attendancePct = stats?.attendance_percent    ?? '—';
-  const upcomingExams = stats?.upcoming_exams_count  ?? 0;
-  const pendingFees   = stats?.pending_fees_count    ?? '—';
-  const weeklyPct     = stats?.weekly_completion_percent ?? '—';
-
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (isLoading && !stats) {
     return (
       <View style={styles.root}>
-        <DashboardHeader studentName={fullName} classSection={classSection} />
+        <DashboardHeader studentName={fullName} />
         <LoadingSkeleton />
       </View>
     );
@@ -170,18 +257,18 @@ export default function StudentDashboardHomeScreen() {
           <RefreshControl
             refreshing={!!isRefetching}
             onRefresh={onRefresh}
-            tintColor={PALETTE.blue}
-            colors={[PALETTE.blue]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
       >
         {/* ── Header ─────────────────────────────────────────────────────── */}
         {maybeAnimate ? (
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            <DashboardHeader studentName={fullName} classSection={classSection} />
+            <DashboardHeader studentName={fullName} />
           </Animated.View>
         ) : (
-          <DashboardHeader studentName={fullName} classSection={classSection} />
+          <DashboardHeader studentName={fullName} />
         )}
 
         {/* ── Category selector ──────────────────────────────────────────── */}
@@ -189,12 +276,26 @@ export default function StudentDashboardHomeScreen() {
           <CategorySelector value={segment} onChange={setSegment} />
         </FadeIn>
 
-        {/* ── Summary card ───────────────────────────────────────────────── */}
+        {/* ── Home grid: Attendance, My Class, Fees, Transport ───────────── */}
         <FadeIn anim={fadeAnim}>
-          <HomeSummaryCard
-            attendancePercent={stats?.attendance_percent}
-            weeklyCompletionPercent={stats?.weekly_completion_percent}
-            onViewDetails={() => handleModulePress('attendance')}
+          <DashboardHomeGrid
+            attendancePercent={stats?.attendance_percent ?? '—'}
+            classLabel={classTeacherCard.classLabel}
+            sectionLabel={classTeacherCard.sectionLabel}
+            teacherName={classTeacherCard.teacherName}
+            teacherDesignation={classTeacherCard.teacherDesignation}
+            classTeacherLoading={classTeacherCard.isLoading}
+            feesMonthTotal={feesMonthTotal}
+            feesQuarterTotal={feesQuarterTotal}
+            receiptCount={receiptCount}
+            feesLoading={loadingHomeFees || loadingHomeReceipts}
+            routeName={transportRouteLabel}
+            transportActive={transportAssigned}
+            transportLoading={loadingHomeTransport}
+            onPressAttendance={() => handleModulePress('attendance')}
+            onPressMyClass={() => handleModulePress('class')}
+            onPressFees={() => handleModulePress('fees')}
+            onPressTransport={() => handleModulePress('transport')}
           />
         </FadeIn>
 
@@ -206,35 +307,6 @@ export default function StudentDashboardHomeScreen() {
             onItemPress={() => handleModulePress('communication')}
             onViewAll={() => handleModulePress('communication')}
           />
-        </FadeIn>
-
-        {/* ── Stat cards (horizontal scroll) ─────────────────────────────── */}
-        <FadeIn anim={fadeAnim}>
-          <View style={styles.statsRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.statsScrollContent}
-            >
-              <Pressable onPress={() => handleModulePress('attendance')}>
-                <StatCard
-                  label="Attendance"
-                  value={typeof attendancePct === 'number' ? `${attendancePct}%` : attendancePct}
-                />
-              </Pressable>
-
-              <Pressable onPress={() => handleModulePress('examinations')}>
-                <StatCard label="Upcoming Exams" value={String(upcomingExams)} />
-              </Pressable>
-
-              <StatCard label="Pending Fees" value={String(pendingFees)} />
-
-              <StatCard
-                label="Weekly Done"
-                value={typeof weeklyPct === 'number' ? `${weeklyPct}%` : weeklyPct}
-              />
-            </ScrollView>
-          </View>
         </FadeIn>
 
         {/* ── Module sections ─────────────────────────────────────────────── */}
@@ -263,7 +335,7 @@ export default function StudentDashboardHomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: PALETTE.pageBg,
+    backgroundColor: colors.backgroundStart,
     // Web: constrain max-width and centre (replaces screenRootWeb from old theme)
     ...(Platform.OS === 'web'
       ? { maxWidth: 680, width: '100%', alignSelf: 'center' as const }
@@ -273,14 +345,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: spacing[2],
     paddingBottom: spacing[16],
-  },
-  statsRow: {
-    marginBottom: spacing[2],
-  },
-  statsScrollContent: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
   },
 });

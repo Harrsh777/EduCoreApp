@@ -4,11 +4,11 @@
  */
 
 import { View, Text, StyleSheet, Pressable, Platform, type ViewProps } from 'react-native';
-import { studentDashboardTheme } from '@/theme/studentDashboard';
+import { studentDashboardTheme, studentDashboardCardStyle } from '@/theme/studentDashboard';
 import { textStyles } from '@/theme/typography';
 import { spacing } from '@/theme/spacing';
 
-const { colors, cardRadius, cardPadding, webSolid } = studentDashboardTheme;
+const { colors, cardPadding } = studentDashboardTheme;
 
 type HomeSummaryCardProps = ViewProps & {
   attendancePercent?: number | string;
@@ -55,11 +55,9 @@ export function HomeSummaryCard({
 const styles = StyleSheet.create({
   wrap: { marginHorizontal: spacing[4], marginBottom: spacing[4] },
   card: {
-    backgroundColor: colors.cardBg,
-    borderRadius: cardRadius,
+    ...studentDashboardCardStyle,
+    backgroundColor: colors.surface,
     padding: cardPadding,
-    borderWidth: 1,
-    borderColor: Platform.OS === 'web' && webSolid ? webSolid.borderCard : 'rgba(59, 164, 255, 0.15)',
   },
   row: {
     flexDirection: 'row',
@@ -81,7 +79,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderRadius: 20,
-    backgroundColor: Platform.OS === 'web' && webSolid ? webSolid.ovalBg : 'rgba(59, 164, 255, 0.2)',
+    backgroundColor: colors.primaryLight,
     marginTop: spacing[2],
   },
   ovalText: {

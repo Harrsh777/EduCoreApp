@@ -4,7 +4,6 @@
  */
 
 import { LoginForm } from '@/components/forms';
-import { safeBack } from '@/lib/safe-back';
 import { spacing } from '@/theme/spacing';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,16 +60,7 @@ export default function StaffLoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Top nav: Back + Schedule a Demo */}
-            <View style={styles.nav}>
-              <Pressable onPress={() => safeBack(router, '/login')} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={22} color={PRIMARY} />
-                <Text style={styles.backText}>Back</Text>
-              </Pressable>
-              <Pressable onPress={() => router.push('/demo')}>
-                <Text style={styles.demoLink}>Schedule a Demo</Text>
-              </Pressable>
-            </View>
+     
 
             {/* Glass card */}
             <View style={styles.card}>

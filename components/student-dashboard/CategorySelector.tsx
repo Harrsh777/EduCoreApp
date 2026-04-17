@@ -1,7 +1,5 @@
 /**
- * Home category/segment selector: five circular options (Today, Upcoming, etc.).
- * On web: use View instead of ScrollView so content is not in a composited layer (no text blur).
- * On web: use View+onTouchEnd instead of Pressable so labels are not inside a touch layer.
+ * Segment selector — each option has its own accent (jewel tones on pastel page).
  */
 
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform, type ViewStyle } from 'react-native';
@@ -9,17 +7,17 @@ import { studentDashboardTheme } from '@/theme/studentDashboard';
 import { textStyles } from '@/theme/typography';
 import { spacing } from '@/theme/spacing';
 
-const { colors, textNormal } = studentDashboardTheme;
+const { colors } = studentDashboardTheme;
 const isWeb = Platform.OS === 'web';
 
 export type HomeSegment = 'today' | 'upcoming' | 'notifications' | 'messages' | 'all';
 
-const SEGMENTS: { id: HomeSegment; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'notifications', label: 'Notifications' },
-  { id: 'messages', label: 'Messages' },
-  { id: 'all', label: 'All' },
+const SEGMENTS: { id: HomeSegment; label: string; ring: string; fill: string }[] = [
+  { id: 'today', label: 'Today', ring: '#A78BFA', fill: '#7C3AED' },
+  { id: 'upcoming', label: 'Upcoming', ring: '#F472B6', fill: '#DB2777' },
+  { id: 'notifications', label: 'Notifications', ring: '#22D3EE', fill: '#0891B2' },
+  { id: 'messages', label: 'Messages', ring: '#FBBF24', fill: '#D97706' },
+  { id: 'all', label: 'All', ring: '#34D399', fill: '#059669' },
 ];
 
 const CIRCLE_SIZE = 44;
@@ -41,10 +39,19 @@ function SegmentItem({
 }) {
   const content = (
     <>
-      <View style={[styles.circle, active && styles.circleActive]}>
-        {active ? <View style={styles.circleInner} /> : null}
+      <View
+        style={[
+          styles.circle,
+          { borderColor: active ? seg.fill : seg.ring },
+          active && { backgroundColor: seg.fill },
+        ]}
+      >
+        {active ? <View style={[styles.circleInner, { backgroundColor: '#FFFFFF' }]} /> : null}
       </View>
-      <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+      <Text
+        style={[styles.label, active && styles.labelActive, active && { color: seg.fill }]}
+        numberOfLines={1}
+      >
         {seg.label}
       </Text>
     </>
@@ -121,28 +128,22 @@ const styles = StyleSheet.create({
     height: CIRCLE_SIZE,
     borderRadius: CIRCLE_SIZE / 2,
     borderWidth: 2,
-    borderColor: colors.textSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[1],
-  },
-  circleActive: {
-    borderColor: colors.highlight,
-    backgroundColor: colors.highlight,
+    backgroundColor: 'rgba(255,255,255,0.7)',
   },
   circleInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.primaryBg,
   },
   label: {
     ...textStyles.caption,
     color: colors.textSecondary,
-    ...textNormal,
+    fontWeight: '500',
   },
   labelActive: {
-    color: colors.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
