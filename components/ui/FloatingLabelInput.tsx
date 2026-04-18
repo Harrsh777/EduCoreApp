@@ -2,11 +2,11 @@
  * Large enterprise input with floating label.
  */
 
-import { View, TextInput, Text, StyleSheet, type TextInputProps } from 'react-native';
-import { useState, type ReactNode } from 'react';
 import { colors } from '@/theme/colors';
-import { spacing, radii } from '@/theme/spacing';
-import { textStyles, fontSize } from '@/theme/typography';
+import { radii, spacing } from '@/theme/spacing';
+import { fontSize, textStyles } from '@/theme/typography';
+import { useState, type ReactNode } from 'react';
+import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
 const LABEL_TOP = spacing[2];
 const LABEL_FOCUSED_TOP = -spacing[1];
@@ -63,16 +63,18 @@ export function FloatingLabelInput({
           error && styles.inputWrapError,
         ]}
       >
-        <Text
-          style={[
-            styles.label,
-            { color: labelColor, pointerEvents: 'none' },
-            fontFamily && { fontFamily },
-            floating && styles.labelFloating,
-            floating && { color: focusColor },
-            error && styles.labelError,
-          ]}
-        >
+  <Text
+  style={[
+    styles.label,
+    {
+      color: floating ? focusColor : labelColor,
+      opacity: 1, // 👈 ensure no fading
+    },
+    fontFamily && { fontFamily },
+    floating && styles.labelFloating,
+    error && styles.labelError,
+  ]}
+>
           {label}
         </Text>
         <View style={styles.inputRow}>
@@ -93,8 +95,8 @@ export function FloatingLabelInput({
               setFocused(false);
               onBlur?.(e);
             }}
-            placeholderTextColor={placeholderColor}
-            placeholder={floating ? '' : undefined}
+          placeholder=" "
+placeholderTextColor="transparent"
             {...rest}
           />
           {rightAccessory ? <View style={styles.accessory}>{rightAccessory}</View> : null}

@@ -4,6 +4,7 @@
  * Dashboard home data cached for 60 seconds.
  */
 
+import { rawRowBalance } from '@/lib/studentFeesV2';
 import { studentService } from '@/services/student.service';
 
 const DASHBOARD_CACHE_MS = 60 * 1000;
@@ -24,12 +25,7 @@ function feeRowBalanceDue(row: Record<string, unknown>): number {
   if (typeof row.balance_due === 'number' && !Number.isNaN(row.balance_due)) {
     return Math.max(0, row.balance_due);
   }
-  if (typeof row.balance === 'number' && !Number.isNaN(row.balance)) {
-    return Math.max(0, row.balance);
-  }
-  const amount = typeof row.amount === 'number' ? row.amount : 0;
-  const paid = typeof row.paid_amount === 'number' ? row.paid_amount : 0;
-  return Math.max(0, amount - paid);
+  return rawRowBalance(row);
 }
 
 function parseDueDate(d?: string): Date | null {

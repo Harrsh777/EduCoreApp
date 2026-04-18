@@ -17,7 +17,9 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useStudent } from '@/lib/student-context';
 import { env } from '@/lib/env';
+import { summarizeTransportForHome } from '@/lib/student-transport-home';
 import { getStudentByAdmissionNo } from '@/services/school.service';
+import { extractStudentFeesRows } from '@/lib/studentFeesV2';
 import {
   countActiveReceipts,
   getDashboardHomeStats,
@@ -168,8 +170,7 @@ export default function StudentDashboardHomeScreen() {
       if (!effectiveId) return [];
       const r = await studentService.getFees({ school_code: schoolCode, student_id: effectiveId });
       const body = (r as { data?: unknown })?.data ?? r;
-      const list = Array.isArray(body) ? body : (body as { data?: unknown[] })?.data ?? (body as { fees?: unknown[] })?.fees ?? [];
-      return Array.isArray(list) ? list : [];
+      return extractStudentFeesRows(body);
     },
     enabled: canFetchHomeExtras,
     staleTime: 60 * 1000,
@@ -193,6 +194,11 @@ export default function StudentDashboardHomeScreen() {
     has_transport?: boolean;
     route?: string | { name?: string };
     route_name?: string;
+    stops?: unknown[];
+    vehicle?: unknown;
+    pickup_stop?: unknown;
+    dropoff_stop?: unknown;
+    vehicle_number?: string;
   };
 
   const { data: homeTransportRaw, refetch: refetchHomeTransport, isLoading: loadingHomeTransport } = useQuery({
@@ -219,22 +225,14 @@ export default function StudentDashboardHomeScreen() {
     [homeReceiptsRaw]
   );
 
-  const { transportRouteLabel, transportAssigned } = useMemo(() => {
-    const info = homeTransportRaw ?? {};
-    const hasTransport =
-      info.has_transport === true ||
-      Boolean(info.route || info.route_name || (info as { stops?: unknown[] }).stops);
-    if (!hasTransport) return { transportRouteLabel: 'No transport assigned', transportAssigned: false };
-    const r = info.route ?? info.route_name;
-    if (typeof r === 'string' && r.trim()) return { transportRouteLabel: r.trim(), transportAssigned: true };
-    if (r && typeof r === 'object' && typeof (r as { name?: string }).name === 'string') {
-      const n = (r as { name: string }).name.trim();
-      if (n) return { transportRouteLabel: n, transportAssigned: true };
-    }
-    if (typeof info.route_name === 'string' && info.route_name.trim()) {
-      return { transportRouteLabel: info.route_name.trim(), transportAssigned: true };
-    }
-    return { transportRouteLabel: 'Route', transportAssigned: true };
+  const { transportRouteLabel, transportAssigned, transportBusLine, transportStopsLine } = useMemo(() => {
+    const s = summarizeTransportForHome(homeTransportRaw);
+    return {
+      transportRouteLabel: s.routeLabel,
+      transportAssigned: s.hasTransport,
+      transportBusLine: s.busLine,
+      transportStopsLine: s.stopsLine,
+    };
   }, [homeTransportRaw]);
 
   const { data: attendanceData, refetch: refetchAttendance } = useQuery({
@@ -413,11 +411,13 @@ export default function StudentDashboardHomeScreen() {
             receiptCount={receiptCount}
             feesLoading={loadingHomeFees || loadingHomeReceipts}
             routeName={transportRouteLabel}
+            transportBusLine={transportBusLine}
+            transportStopsLine={transportStopsLine}
             transportActive={transportAssigned}
             transportLoading={loadingHomeTransport}
             onPressAttendance={() => handleModulePress('attendance')}
             onPressMyClass={() => handleModulePress('class')}
-            onPressFees={() => handleModulePress('fees')}
+            onPressFees={() => handleModulePress('fees/v2')}
             onPressTransport={() => handleModulePress('transport')}
           />
         </Container>
@@ -439,7 +439,7 @@ export default function StudentDashboardHomeScreen() {
               { id: 'marks', label: 'Marks', path: 'marks', icon: 'bar-chart' as const },
               { id: 'calendar', label: 'Calendar', path: 'calendar/academic', icon: 'calendar-outline' as const },
               { id: 'library', label: 'Library', path: 'library', icon: 'library' as const },
-              { id: 'fees', label: 'Fees', path: 'fees', icon: 'cash' as const },
+              { id: 'fees', label: 'Fees', path: 'fees/v2', icon: 'cash' as const },
             ].map((mod) => (
               <ModuleButton
                 key={mod.id}

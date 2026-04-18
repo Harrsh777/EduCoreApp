@@ -5,6 +5,8 @@
  */
 
 import { api } from '@/lib/api';
+import { env } from '@/lib/env';
+import { getStudentTransportFromSupabase } from '@/services/transport.supabase';
 
 type Query = { school_code: string; class?: string; section?: string; search?: string };
 
@@ -36,6 +38,11 @@ export const studentService = {
   },
 
   getTransport(params: { school_code: string; student_id: string }) {
+    if (env.USE_SUPABASE_DASHBOARD) {
+      return getStudentTransportFromSupabase(params.school_code, params.student_id).then((data) => ({
+        data,
+      }));
+    }
     return api.get('/api/student/transport', { params });
   },
 

@@ -38,7 +38,7 @@ export const STUDENT_DASHBOARD_SECTIONS: SectionConfig[] = [
     id: 'fees-transport',
     title: 'Fees & Transport',
     modules: [
-      { id: 'fees', label: 'Fees', path: 'fees', icon: 'cash' },
+      { id: 'fees', label: 'Fees', path: 'fees/v2', icon: 'cash' },
       { id: 'transport', label: 'Transport Info', path: 'transport', icon: 'bus' },
     ],
   },

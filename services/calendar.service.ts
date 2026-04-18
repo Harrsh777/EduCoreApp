@@ -13,7 +13,12 @@ export function getCalendarAcademic(
   school_code: string,
   params?: { academic_year?: string; include_events?: boolean }
 ) {
-  if (env.USE_SUPABASE_DASHBOARD) return getCalendarAcademicFromSupabase(school_code, params?.academic_year);
+  if (env.USE_SUPABASE_DASHBOARD) {
+    return getCalendarAcademicFromSupabase(school_code, {
+      academic_year: params?.academic_year,
+      include_events: params?.include_events,
+    });
+  }
   return api.get('/api/calendar/academic', p(school_code, params as Record<string, unknown>));
 }
 

@@ -6,7 +6,7 @@ export default function AdminTabsLayout() {
   const { colors: c } = useTheme();
 
   return (
-    <RoleGuard allowedRoles={['admin']} redirectTo="/admin/login">
+    <RoleGuard allowedRoles={['admin']} redirectTo="/login">
       <Tabs
         screenOptions={{
           headerShown: true,

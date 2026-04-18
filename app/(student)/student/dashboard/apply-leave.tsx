@@ -1,17 +1,20 @@
 /**
  * Student apply leave — matches student dashboard tokens (warm base, navy, teal hints).
- * Custom calendar date picker.
+ * Custom calendar date picker. Leave type is resolved automatically (first active school type).
  */
 
 import { useStudent } from '@/lib/student-context';
 import { useToastStore } from '@/lib/toast';
 import { leaveService } from '@/services/leave.service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
+import type { AlertButton } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
+  InteractionManager,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,6 +25,27 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+function leaveSubmitErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const d = error.response?.data;
+    if (typeof d === 'string') return d;
+    if (d && typeof d === 'object') {
+      const o = d as Record<string, unknown>;
+      if (typeof o.message === 'string') return o.message;
+      if (typeof o.error === 'string') return o.error;
+    }
+    return error.message || 'Something went wrong. Please try again.';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong. Please try again.';
+}
+
+function showLeaveAlert(title: string, message?: string, buttons?: AlertButton[]) {
+  InteractionManager.runAfterInteractions(() => {
+    Alert.alert(title, message ?? '', buttons);
+  });
+}
 
 // ─── Tokens — student dashboard (warm base, navy, teal accents) ─────────────
 const P = {
@@ -53,8 +77,16 @@ function toDateString(y: number, m: number, d: number) {
 function parseDate(s: string) {
   const p = s.split('-');
   if (p.length !== 3) return null;
-  const y = parseInt(p[0]), m = parseInt(p[1])-1, d = parseInt(p[2]);
+  const y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
   return isNaN(y)||isNaN(m)||isNaN(d) ? null : { y, m, d };
+}
+
+/** ISO yyyy-mm-dd → display dd-mm-yyyy */
+function formatDisplayDate(iso: string) {
+  const parsed = parseDate(iso);
+  if (!parsed) return '';
+  const { y, m, d } = parsed;
+  return `${String(d).padStart(2,'0')}-${String(m + 1).padStart(2,'0')}-${y}`;
 }
 
 // ─── Calendar picker ──────────────────────────────────────────────────────────
@@ -187,12 +219,13 @@ const cal = StyleSheet.create({
 // ─── Date field ───────────────────────────────────────────────────────────────
 function DateField({ label, value, onChange }: { label:string; value:string; onChange:(v:string)=>void }) {
   const [open, setOpen] = useState(false);
+  const shown = formatDisplayDate(value);
   return (
     <View style={df.wrap}>
       <Text style={df.label}>{label}</Text>
       <Pressable onPress={() => setOpen(true)}
         style={({ pressed }) => [df.btn, pressed && { borderColor: P.blue }]}>
-        <Text style={[df.value, !value && df.placeholder]}>{value || 'Select date'}</Text>
+        <Text style={[df.value, !shown && df.placeholder]}>{shown || 'dd-mm-yyyy'}</Text>
         <Text style={df.icon}>📅</Text>
       </Pressable>
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -227,58 +260,43 @@ export default function StudentApplyLeaveScreen() {
   const studentId   = student?.id ?? '';
   const showToast   = useToastStore((s) => s.show);
   const queryClient = useQueryClient();
-  const handleSubmit = () => {
-    if (!leaveTypeId || !startDate || !endDate || !reason) {
-      Alert.alert("Incomplete Form", "Please fill all fields before submitting.");
-      return;
-    }
-  
-    if (new Date(endDate) < new Date(startDate)) {
-      Alert.alert("Invalid Dates", "End date cannot be before start date.");
-      return;
-    }
-  
-    if (selectedType?.max_days && totalDays > selectedType.max_days) {
-      Alert.alert(
-        "Limit Exceeded",
-        `Maximum ${selectedType.max_days} days allowed for this leave type.`
-      );
-      return;
-    }
-  
-    mutation.mutate();
-  };
-  const [leaveTypeId, setLeaveTypeId] = useState('');
+
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
   const [reason,      setReason]      = useState('');
 
-  const { data: typesData, isLoading } = useQuery({
+  const { data: typesData, isLoading: typesLoading, isSuccess: typesReady } = useQuery({
     queryKey: ['leave', 'types', schoolCode],
     queryFn:  () => leaveService.getLeaveTypes(schoolCode).then(r => r.data),
     enabled:  Boolean(schoolCode),
   });
-  const leaveTypes = (typesData ?? []).filter((t: any) => t.is_active);
+  const leaveTypes = (typesData ?? []).filter((t: { is_active?: boolean }) => t.is_active !== false);
+
+  const defaultLeaveType = useMemo(
+    () => (leaveTypes[0] as { id?: string; name?: string } | undefined) ?? null,
+    [leaveTypes],
+  );
 
   const totalDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
     return Math.ceil(Math.abs(new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1;
   }, [startDate, endDate]);
 
-  const selectedType = leaveTypes.find((t: any) => t.id === leaveTypeId);
-
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!schoolCode || !studentId || !defaultLeaveType?.id) {
+        throw new Error('Unable to submit. Check your connection or contact the school.');
+      }
       const response = await leaveService.postStudentLeaveRequest(
         schoolCode,
         {
           school_code: schoolCode,
           student_id: studentId,
-          leave_type_id: leaveTypeId,
-          leave_title: selectedType?.name,
+          leave_type_id: defaultLeaveType.id,
+          leave_title: defaultLeaveType.name ?? 'Leave',
           leave_start_date: startDate,
           leave_end_date: endDate,
-          reason,
+          reason: reason.trim(),
         }
       );
 
@@ -289,33 +307,58 @@ export default function StudentApplyLeaveScreen() {
 
       return response;
     },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['leave', 'student-requests', schoolCode, studentId],
-      });
-      showToast('Leave request sent successfully.', 'success');
-      Alert.alert(
-        'Request Sent ✅',
-        'Your leave request has been successfully sent.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    },
-
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
-      const message =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        'Something went wrong. Please try again.';
-      showToast(message, 'error');
-      Alert.alert('Request Failed ❌', message);
-    },
   });
 
+  const handleSubmit = () => {
+    void (async () => {
+      if (!studentId) {
+        showLeaveAlert('Session', 'Student profile is not loaded. Please sign in again.');
+        return;
+      }
+      if (typesReady && leaveTypes.length === 0) {
+        showLeaveAlert(
+          'Not Available',
+          'Leave requests are not set up for your school yet. Please contact the office.',
+        );
+        return;
+      }
+      if (!startDate || !endDate || !reason.trim()) {
+        showLeaveAlert('Incomplete Form', 'Please fill all required fields before submitting.');
+        return;
+      }
 
-  const canSubmit = !!(leaveTypeId && startDate && endDate && reason) && !mutation.isPending;
+      if (new Date(endDate) < new Date(startDate)) {
+        showLeaveAlert('Invalid Dates', 'End date cannot be before start date.');
+        return;
+      }
+
+      try {
+        await mutation.mutateAsync();
+        queryClient.invalidateQueries({
+          queryKey: ['leave', 'student-requests', schoolCode, studentId],
+        });
+        showToast('Leave request sent successfully.', 'success');
+        showLeaveAlert(
+          'Request Sent',
+          'Your leave request has been successfully sent.',
+          [{ text: 'OK', onPress: () => router.back() }],
+        );
+      } catch (error: unknown) {
+        const message = leaveSubmitErrorMessage(error);
+        showToast(message, 'error');
+        showLeaveAlert('Request Failed', message);
+      }
+    })();
+  };
+
+  const canSend =
+    !!studentId &&
+    !!startDate &&
+    !!endDate &&
+    !!reason.trim() &&
+    !!defaultLeaveType?.id &&
+    !typesLoading &&
+    !mutation.isPending;
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS==='ios' ? 'padding' : undefined}>
@@ -323,56 +366,43 @@ export default function StudentApplyLeaveScreen() {
 
         {/* Header */}
         <View style={s.pageHeader}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
-            <Text style={s.backIcon}>‹</Text>
-          </Pressable>
-          <View>
+          <View style={s.titleBlock}>
             <Text style={s.pageTitle}>Apply for Leave</Text>
-            <Text style={s.pageSubtitle}>Fill in all details below</Text>
+            <Text style={s.pageSubtitle}>Submit your leave request to the office</Text>
           </View>
         </View>
 
-        {/* Leave type */}
-        <Text style={s.sectionLabel}>Leave Type</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.typeScroll}>
-          {isLoading ? (
-            <ActivityIndicator color={P.blue} style={{ marginLeft:8 }} />
-          ) : leaveTypes.map((type: any) => {
-            const active = leaveTypeId === type.id;
-            return (
-              <Pressable key={type.id} onPress={() => setLeaveTypeId(type.id)}
-                style={[s.typeCard, active && s.typeCardActive]}>
-                <View style={[s.typeDot, active && s.typeDotActive]} />
-                <Text style={[s.typeName, active && s.typeNameActive]}>{type.name}</Text>
-                {type.max_days ? <Text style={s.typeMax}>Max {type.max_days}d</Text> : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <Pressable onPress={() => router.back()} style={s.backRow}>
+          <Text style={s.backChevron}>‹</Text>
+          <Text style={s.backLabel}>Back</Text>
+        </Pressable>
+
+        {typesReady && leaveTypes.length === 0 ? (
+          <Text style={s.configWarning}>
+            Leave requests are not available for your school yet. Please contact the office.
+          </Text>
+        ) : null}
 
         {/* Date pickers */}
-        <Text style={s.sectionLabel}>Date Range</Text>
         <View style={s.dateRow}>
-          <DateField label="Start Date" value={startDate} onChange={setStartDate} />
-          <Text style={s.dateSep}>→</Text>
-          <DateField label="End Date" value={endDate} onChange={setEndDate} />
+          <DateField label="Start Date *" value={startDate} onChange={setStartDate} />
+          <Text style={s.dateSep}> </Text>
+          <DateField label="End Date *" value={endDate} onChange={setEndDate} />
         </View>
 
-        {/* Duration badge */}
-        {totalDays > 0 && (
+        {totalDays > 0 ? (
           <View style={s.durationBadge}>
             <View style={s.durationDot} />
             <Text style={s.durationText}>
               {totalDays} {totalDays===1?'day':'days'} selected
-              {selectedType?.max_days ? `  ·  Max ${selectedType.max_days} days` : ''}
             </Text>
           </View>
-        )}
+        ) : null}
 
         {/* Reason */}
-        <Text style={s.sectionLabel}>Reason</Text>
+        <Text style={[s.sectionLabel, { marginTop: totalDays > 0 ? 20 : 24 }]}>Reason *</Text>
         <TextInput
-          placeholder="Briefly explain your reason…"
+          placeholder="Please provide a reason for your leave request..."
           placeholderTextColor={P.textDim}
           multiline
           value={reason}
@@ -380,18 +410,29 @@ export default function StudentApplyLeaveScreen() {
           style={s.reasonInput}
         />
 
-        {/* Submit — always pressable so validation/success/error feedback always runs */}
-        <Pressable onPress={handleSubmit}
-          style={({ pressed }) => [s.submitBtn, !canSubmit && s.submitBtnDisabled, pressed && canSubmit && { opacity: 0.85 }]}>
-          {mutation.isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Text style={s.submitText}>Submit Request</Text>
-              <Text style={s.submitArrow}>→</Text>
-            </>
-          )}
-        </Pressable>
+        {/* Actions */}
+        <View style={s.actionsRow}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.cancelBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={s.cancelBtnText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleSubmit}
+            style={({ pressed }) => [
+              s.sendBtn,
+              !canSend && s.sendBtnDisabled,
+              pressed && canSend && { opacity: 0.85 },
+            ]}
+          >
+            {mutation.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={s.sendBtnText}>Send Request</Text>
+            )}
+          </Pressable>
+        </View>
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -403,79 +444,107 @@ const s = StyleSheet.create({
   root:   { flex:1, backgroundColor:P.pageBg },
   scroll: { padding:20, paddingTop:60, paddingBottom:60 },
 
-  // Header
-  pageHeader:  { flexDirection:'row', alignItems:'center', gap:14, marginBottom:32 },
-  backBtn: {
-    width:42, height:42, borderRadius:13,
-    backgroundColor:P.cardBg, borderWidth:1.5, borderColor:P.cardBorder,
-    alignItems:'center', justifyContent:'center',
-    ...Platform.select({
-      ios: { shadowColor:P.shadow, shadowOffset:{width:0,height:4}, shadowOpacity:1, shadowRadius:10 },
-      android: { elevation:4 },
-    }),
-  },
-  backIcon:    { color:P.blue, fontSize:24, fontWeight:'400', lineHeight:28 },
+  pageHeader:  { marginBottom:8 },
+  titleBlock:  {},
   pageTitle:   { fontSize:22, fontWeight:'800', color:P.textPrimary, letterSpacing:-0.3 },
-  pageSubtitle:{ fontSize:13, color:P.textMid, marginTop:2 },
+  pageSubtitle:{ fontSize:13, color:P.textMid, marginTop:4 },
 
-  // Section label
+  backRow: {
+    flexDirection:'row',
+    alignItems:'center',
+    gap:4,
+    alignSelf:'flex-start',
+    marginBottom:20,
+    paddingVertical:8,
+    paddingRight:12,
+  },
+  backChevron: { color:P.blue, fontSize:22, fontWeight:'600', marginTop:-2 },
+  backLabel:   { color:P.blue, fontSize:15, fontWeight:'700' },
+
+  configWarning: {
+    fontSize:13,
+    color:'#B45309',
+    backgroundColor:'#FEF3C7',
+    borderRadius:12,
+    padding:12,
+    marginBottom:16,
+    overflow:'hidden',
+  },
+
   sectionLabel: {
-    fontSize:11, fontWeight:'700', color:P.textMid,
-    textTransform:'uppercase', letterSpacing:1, marginBottom:10, marginTop:24,
+    fontSize:11,
+    fontWeight:'700',
+    color:P.textMid,
+    textTransform:'uppercase',
+    letterSpacing:1,
+    marginBottom:10,
   },
 
-  // Leave type cards
-  typeScroll: { marginBottom:4 },
-  typeCard: {
-    backgroundColor:P.cardBg, borderRadius:14, borderWidth:1.5,
-    borderColor:P.cardBorder, paddingVertical:14, paddingHorizontal:16,
-    marginRight:10, minWidth:110, gap:6,
-    ...Platform.select({
-      ios: { shadowColor:P.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:8 },
-      android: { elevation:2 },
-    }),
-  },
-  typeCardActive: { borderColor:P.blue, backgroundColor:P.blueSubtle },
-  typeDot:        { width:8, height:8, borderRadius:4, backgroundColor:P.blueMid },
-  typeDotActive:  { backgroundColor:P.blue },
-  typeName:       { fontSize:14, fontWeight:'700', color:P.textMid },
-  typeNameActive: { color:P.textPrimary },
-  typeMax:        { fontSize:11, color:P.textDim, fontWeight:'500' },
+  dateRow:  { flexDirection:'row', alignItems:'flex-end', gap:10 },
+  dateSep:  { width:8 },
 
-  // Date row
-  dateRow:  { flexDirection:'row', alignItems:'flex-end', gap:8 },
-  dateSep:  { color:P.textDim, fontSize:18, fontWeight:'300', paddingBottom:13 },
-
-  // Duration badge
   durationBadge: {
-    flexDirection:'row', alignItems:'center', gap:8, marginTop:10,
-    backgroundColor:P.blueSubtle, borderRadius:10, borderWidth:1,
-    borderColor:P.cardBorder, paddingVertical:9, paddingHorizontal:14, alignSelf:'flex-start',
+    flexDirection:'row',
+    alignItems:'center',
+    gap:8,
+    marginTop:10,
+    backgroundColor:P.blueSubtle,
+    borderRadius:10,
+    borderWidth:1,
+    borderColor:P.cardBorder,
+    paddingVertical:9,
+    paddingHorizontal:14,
+    alignSelf:'flex-start',
   },
   durationDot:  { width:6, height:6, borderRadius:3, backgroundColor:P.blue },
   durationText: { fontSize:13, color:P.blue, fontWeight:'600' },
 
-  // Reason
   reasonInput: {
-    backgroundColor:P.cardBg, borderRadius:16, borderWidth:1.5,
-    borderColor:P.cardBorder, padding:16, minHeight:110,
-    textAlignVertical:'top', color:P.textPrimary, fontSize:14, lineHeight:22,
+    backgroundColor:P.cardBg,
+    borderRadius:16,
+    borderWidth:1.5,
+    borderColor:P.cardBorder,
+    padding:16,
+    minHeight:110,
+    textAlignVertical:'top',
+    color:P.textPrimary,
+    fontSize:14,
+    lineHeight:22,
     ...Platform.select({
       ios: { shadowColor:P.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:8 },
       android: { elevation:2 },
     }),
   },
 
-  // Submit
-  submitBtn: {
-    flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8,
-    backgroundColor:P.blue, borderRadius:18, paddingVertical:18, marginTop:32,
+  actionsRow: {
+    flexDirection:'row',
+    alignItems:'center',
+    gap:12,
+    marginTop:28,
+  },
+  cancelBtn: {
+    flex:1,
+    alignItems:'center',
+    justifyContent:'center',
+    paddingVertical:16,
+    borderRadius:16,
+    borderWidth:1.5,
+    borderColor:P.cardBorder,
+    backgroundColor:P.cardBg,
+  },
+  cancelBtnText: { fontSize:15, fontWeight:'700', color:P.textPrimary },
+  sendBtn: {
+    flex:1,
+    alignItems:'center',
+    justifyContent:'center',
+    paddingVertical:16,
+    borderRadius:16,
+    backgroundColor:P.blue,
     ...Platform.select({
       ios: { shadowColor:P.blue, shadowOffset:{width:0,height:6}, shadowOpacity:0.35, shadowRadius:14 },
       android: { elevation:8 },
     }),
   },
-  submitBtnDisabled: { backgroundColor:P.blueMid },
-  submitText:  { color:'#fff', fontWeight:'800', fontSize:16, letterSpacing:0.2 },
-  submitArrow: { color:'#fff', fontSize:18, fontWeight:'300' },
+  sendBtnDisabled: { backgroundColor:P.blueMid },
+  sendBtnText: { color:'#fff', fontWeight:'800', fontSize:15, letterSpacing:0.2 },
 });

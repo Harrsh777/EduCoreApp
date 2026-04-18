@@ -1,281 +1,169 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Href, Link } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import {
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-/* ---------------- DESIGN SYSTEM ---------------- */
+import { PortalCard } from '@/components/login/PortalCard';
+import { spacing } from '@/theme/spacing';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Href } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COLORS = {
-  background: '#FAF8F5',
-  card: '#FFFFFF',
-  primary: '#7C5CFA',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6B6B6B',
-  studentBg: '#EEF4FF',
-  staffBg: '#FDECF1',
-};
+  gradTop: '#F8FAFC',
+  gradBottom: '#EEF2FF',
+  surface: '#FFFFFF',
+  primary: '#4F46E5',
+  border: 'rgba(148, 163, 184, 0.35)',
+  header: '#0F172A',
+  muted: '#64748B',
+} as const;
 
-const SPACING = {
-  xs: 8,
-  sm: 12,
-  md: 16,
-  lg: 24,
-  xl: 40,
-};
+const CARD_GAP = spacing[5];
+const SCREEN_PAD_X = spacing[6];
 
-/* ---------------- TYPES ---------------- */
-
-type LoginOptionCardProps = {
+type PortalDef = {
+  label: string;
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  bg: string;
+  icon: 'school' | 'briefcase';
+  iconTint: string;
   href: Href;
 };
 
-/* ---------------- MAIN SCREEN ---------------- */
+const PORTALS: readonly PortalDef[] = [
+  {
+    label: 'Student',
+    title: 'Login as Student',
+    icon: 'school',
+    iconTint: COLORS.primary,
+    href: '/student/login',
+  },
+  {
+    label: 'Staff',
+    title: 'Login as Staff',
+    icon: 'briefcase',
+    iconTint: COLORS.header,
+    href: '/staff/login',
+  },
+];
 
 export default function LoginHubScreen() {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
+  const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+  const innerRowWidth = windowWidth - SCREEN_PAD_X * 2;
+  const cardWidth = (innerRowWidth - CARD_GAP) / 2;
+  const cardHeight = cardWidth;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+    <View style={styles.root}>
+      <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+        <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+          <View style={styles.screen}>
+            <View style={styles.header}>
+              <Text style={styles.welcome}>Welcome Back</Text>
+              <Text style={styles.subtitle}>Please select your portal</Text>
+            </View>
 
-        {/* SUBTLE BACKGROUND BLOB */}
-        <View style={styles.blob} />
+            <View style={styles.centerBand}>
+              <View style={styles.portalRow}>
+                {PORTALS.map((p) => (
+                  <PortalCard
+                    key={p.label}
+                    label={p.label}
+                    title={p.title}
+                    icon={p.icon}
+                    iconTint={p.iconTint}
+                    href={p.href}
+                    width={cardWidth}
+                    height={cardHeight}
+                    borderColor={COLORS.border}
+                    surfaceColor={COLORS.surface}
+                    labelColor={COLORS.muted}
+                    titleColor={COLORS.header}
+                    iconCircleAlpha="14"
+                  />
+                ))}
+              </View>
+            </View>
 
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.logo}>
-            <Ionicons name="school" size={18} color="#fff" />
+            <View style={[styles.footer, { paddingBottom: Math.max(spacing[6], insets.bottom + spacing[4]) }]}>
+              <Text style={styles.footerText}>
+                Need assistance?{' '}
+                <Text
+                  accessibilityRole="link"
+                  accessibilityLabel="Contact support"
+                  onPress={() => {}}
+                  style={styles.supportLink}
+                >
+                  Contact Support
+                </Text>
+              </Text>
+            </View>
           </View>
-          <Text style={styles.brand}>EduCore</Text>
-        </View>
-
-        {/* WELCOME */}
-        <View style={styles.welcome}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>
-            Choose how you want to login
-          </Text>
-        </View>
-
-        {/* LOGIN CONTAINER */}
-        <Animated.View
-          style={[
-            styles.loginContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <LoginOptionCard
-            title="Login as Student"
-            icon="person"
-            bg={COLORS.studentBg}
-            href="/student/login"
-          />
-
-          <LoginOptionCard
-            title="Login as Staff"
-            icon="briefcase"
-            bg={COLORS.staffBg}
-            href="/staff/login"
-          />
-        </Animated.View>
-
-        {/* FOOTER */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Need help?</Text>
-          <Text style={styles.link}>Contact support</Text>
-        </View>
-
-      </View>
-    </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
+    </View>
   );
 }
-
-/* ---------------- REUSABLE CARD ---------------- */
-
-function LoginOptionCard({
-  title,
-  icon,
-  bg,
-  href,
-}: LoginOptionCardProps) {
-  return (
-    <Link href={href} asChild>
-      <Pressable
-        style={({ pressed }) => [
-          styles.optionCard,
-          { backgroundColor: bg },
-          pressed && styles.pressed,
-        ]}
-      >
-        <View style={styles.iconContainer}>
-          <Ionicons name={icon} size={20} color="#333" />
-        </View>
-
-        <Text numberOfLines={1} style={styles.optionText}>
-          {title}
-        </Text>
-      </Pressable>
-    </Link>
-  );
-}
-
-/* ---------------- STYLES ---------------- */
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  gradient: {
+    flex: 1,
+  },
   safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
-
-  container: {
+  screen: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
+    paddingHorizontal: SCREEN_PAD_X,
   },
-
-  /* BACKGROUND BLOB */
-  blob: {
-    position: 'absolute',
-    top: -80,
-    left: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 200,
-    backgroundColor: 'rgba(124,92,250,0.08)',
-  },
-
-  /* HEADER */
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-    gap: SPACING.sm,
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
   },
-
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  brand: {
-    fontSize: 20,
-    fontFamily: 'PlayfairBold',
-    color: COLORS.textPrimary,
-  },
-
-  /* WELCOME */
   welcome: {
-    marginTop: SPACING.xl,
+    fontSize: 34,
+    fontWeight: '800',
+    color: COLORS.header,
+    letterSpacing: -0.8,
+    lineHeight: 40,
   },
-
-  title: {
-    fontSize: 30,
-    fontFamily: 'PlayfairBold',
-    color: COLORS.textPrimary,
-  },
-
   subtitle: {
-    marginTop: SPACING.xs,
-    fontSize: 14,
-    fontFamily: 'Inter',
-    color: COLORS.textSecondary,
+    marginTop: spacing[1.5],
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.muted,
+    letterSpacing: -0.1,
+    lineHeight: 22,
   },
-
-  /* LOGIN CONTAINER (KEY GROUPING FIX) */
-  loginContainer: {
-    marginTop: SPACING.xl,
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-
-  /* OPTION CARD */
-  optionCard: {
+  centerBand: {
     flex: 1,
-    borderRadius: 18,
-    paddingVertical: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  portalRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 100, // ensures good tap area
+    width: '100%',
+    maxWidth: '100%',
+    gap: CARD_GAP,
   },
-
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.sm,
-  },
-
-  optionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    color: COLORS.textPrimary,
-  },
-
-  /* FOOTER */
   footer: {
+    paddingTop: spacing[4],
     alignItems: 'center',
-    marginBottom: SPACING.lg,
   },
-
   footerText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-
-  link: {
-    marginTop: SPACING.xs,
     fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
-
-  /* INTERACTION */
-  pressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.9,
+  supportLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+    lineHeight: 20,
   },
 });

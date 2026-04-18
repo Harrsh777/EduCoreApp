@@ -17,9 +17,11 @@ import Svg, { Circle, G } from 'react-native-svg';
 
 const { colors, spacing: s } = studentDashboardTheme;
 
-const RING_SIZE = 68;
-const STROKE = 6;
-const CELL_MIN_HEIGHT = 168;
+const RING_SIZE = 52;
+const STROKE = 5;
+/** Short tiles; row height follows the taller cell in each pair */
+const CELL_MIN_HEIGHT = 138;
+const TILE_RADIUS = 16;
 
 function formatInr(amount: number): string {
   return `₹${Math.round(amount).toLocaleString('en-IN')}`;
@@ -101,6 +103,10 @@ export type DashboardHomeGridProps = ViewProps & {
   receiptCount: number;
   feesLoading?: boolean;
   routeName: string;
+  /** Bus identifier for home tile (e.g. "BUS-1") */
+  transportBusLine?: string;
+  /** Pickup / drop-off summary for home tile */
+  transportStopsLine?: string;
   transportActive?: boolean;
   transportLoading?: boolean;
   onPressAttendance: () => void;
@@ -121,6 +127,8 @@ export function DashboardHomeGrid({
   receiptCount,
   feesLoading,
   routeName,
+  transportBusLine,
+  transportStopsLine,
   transportActive = true,
   transportLoading,
   onPressAttendance,
@@ -146,7 +154,7 @@ export function DashboardHomeGrid({
           accessibilityLabel="Attendance, view details"
         >
           <CompactRing value={att} ring={t0.ring} ringTrack={t0.ringTrack} />
-          <Text style={styles.cellTitle}>Attendance</Text>
+          <Text style={[styles.cellTitle, styles.cellTitleStacked]}>Attendance</Text>
           <Text style={[styles.cellMeta, { color: t0.cta }]}>OVERALL</Text>
           <Text style={[styles.cta, { color: t0.cta }]}>View details →</Text>
         </Pressable>
@@ -160,7 +168,7 @@ export function DashboardHomeGrid({
           <View style={styles.rowTitleIcon}>
             <Text style={styles.cellTitle}>My Class</Text>
             <View style={[styles.iconSoft, { backgroundColor: t1.iconBg }]}>
-              <Ionicons name="people-outline" size={18} color={t1.icon} />
+              <Ionicons name="people-outline" size={16} color={t1.icon} />
             </View>
           </View>
           {classTeacherLoading ? (
@@ -189,7 +197,7 @@ export function DashboardHomeGrid({
           <View style={styles.rowTitleIcon}>
             <Text style={styles.cellTitle}>Fees</Text>
             <View style={[styles.iconSoft, { backgroundColor: t2.iconBg }]}>
-              <Ionicons name="wallet-outline" size={18} color={t2.icon} />
+              <Ionicons name="wallet-outline" size={16} color={t2.icon} />
             </View>
           </View>
           {feesLoading ? (
@@ -215,13 +223,22 @@ export function DashboardHomeGrid({
           <View style={styles.rowTitleIcon}>
             <Text style={styles.cellTitle}>Transport</Text>
             <View style={[styles.iconSoft, { backgroundColor: t3.iconBg }]}>
-              <Ionicons name="bus-outline" size={18} color={t3.icon} />
+              <Ionicons name="bus-outline" size={16} color={t3.icon} />
             </View>
           </View>
           {transportLoading ? (
             <ActivityIndicator size="small" color={t3.icon} style={styles.inlineLoader} />
+          ) : transportActive ? (
+            <>
+              <Text style={styles.infoLine} numberOfLines={2}>
+                {transportBusLine?.trim() ? transportBusLine : '—'}
+              </Text>
+              <Text style={styles.metaLine} numberOfLines={3}>
+                {transportStopsLine?.trim() ? transportStopsLine : '—'}
+              </Text>
+            </>
           ) : (
-            <Text style={transportActive ? styles.infoLine : styles.metaLine} numberOfLines={2}>
+            <Text style={styles.metaLine} numberOfLines={2}>
               {routeName}
             </Text>
           )}
@@ -236,45 +253,45 @@ function tileShell(tile: (typeof STUDENT_HOME_TILES)[number]) {
   return {
     backgroundColor: tile.bg,
     borderColor: tile.border,
-    borderWidth: 1.5,
+    borderWidth: 1,
   };
 }
 
 const tileShadow =
   Platform.OS === 'ios'
     ? {
-        shadowColor: '#6D28D9',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
+        shadowColor: '#312E81',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
       }
     : Platform.OS === 'android'
-      ? { elevation: 4 }
+      ? { elevation: 2 }
       : {};
 
 const styles = StyleSheet.create({
   wrap: {
-    marginHorizontal: s.xl,
-    marginBottom: s['2xl'],
+    marginHorizontal: s.lg,
+    marginBottom: s.xl,
   },
   row: {
     flexDirection: 'row',
-    gap: s.lg,
-    marginBottom: s.lg,
+    gap: s.md,
+    marginBottom: s.md,
   },
   cellCard: {
     flex: 1,
-    padding: s.lg,
+    padding: s.md,
     minHeight: CELL_MIN_HEIGHT,
     justifyContent: 'flex-start',
-    borderRadius: studentDashboardTheme.cardRadius,
+    borderRadius: TILE_RADIUS,
     ...tileShadow,
   },
-  pressed: { transform: [{ scale: 0.97 }] },
+  pressed: { transform: [{ scale: 0.98 }] },
   iconSoft: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -282,7 +299,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: s.sm,
+    marginBottom: 6,
     alignSelf: 'center',
   },
   ringCenter: {
@@ -293,7 +310,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ringValue: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -301,36 +318,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: s.xs,
-    gap: s.sm,
+    marginBottom: 2,
+    gap: s.xs,
   },
   cellTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.textPrimary,
+    letterSpacing: -0.2,
   },
+  /** Title row uses icon; no extra bottom margin on the label */
+  cellTitleStacked: { marginBottom: 2 },
   cellMeta: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textAlign: 'center',
+    marginBottom: 2,
   },
   infoLine: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: 4,
+    lineHeight: 16,
+    marginBottom: 2,
   },
   metaLine: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: colors.textSecondary,
-    marginBottom: s.xs,
+    lineHeight: 15,
+    marginBottom: 4,
   },
   cta: {
     marginTop: 'auto',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    lineHeight: 14,
+    letterSpacing: -0.1,
   },
-  inlineLoader: { marginVertical: s.sm },
+  inlineLoader: { marginVertical: s.xs },
 });

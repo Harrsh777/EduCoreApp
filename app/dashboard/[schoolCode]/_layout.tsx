@@ -27,7 +27,7 @@ export default function DashboardSchoolLayout() {
   }
 
   return (
-    <RoleGuard allowedRoles={['admin']} redirectTo="/admin/login">
+    <RoleGuard allowedRoles={['admin']} redirectTo="/login">
       <SchoolProvider schoolCode={code}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />

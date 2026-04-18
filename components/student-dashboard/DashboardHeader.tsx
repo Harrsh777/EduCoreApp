@@ -125,10 +125,11 @@ const styles = StyleSheet.create({
   },
   greetingWrap: { flex: 1, minWidth: 0, marginRight: s.md },
   greeting: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
     color: colors.textPrimary,
     letterSpacing: -0.2,
+    lineHeight: 22,
   },
   greetingName: {
     color: colors.primaryBright,

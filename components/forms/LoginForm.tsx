@@ -14,11 +14,12 @@ import { authService } from '@/services/auth.service';
 import { supabaseTableAuthService } from '@/services/supabase-table-auth.service';
 import type { AreaPalette } from '@/theme/areaPalettes';
 import { spacing } from '@/theme/spacing';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ReactNode } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 function getDashboardPath(role: NonNullable<Role>, school_code?: string | null): string {
   if (role === 'admin' && school_code) return `/dashboard/${encodeURIComponent(school_code)}`;
@@ -265,16 +266,18 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
   });
 
   const loading = mutation.isPending;
-  const inputOverrides: InputThemeOverrides | undefined = areaPalette || fontFamily
+  const inputOverrides: InputThemeOverrides | undefined =
+  areaPalette || fontFamily
     ? {
         ...(areaPalette
           ? {
               labelColor: areaPalette.textSecondary,
-              inputColor: areaPalette.textPrimary,
-              placeholderColor: areaPalette.textSecondary,
+              inputColor: '#0f172a',          // 👈 solid text (important)
+              placeholderColor: '#94a3b8',   // 👈 FIXED (no shadow)
               borderColor: areaPalette.border,
               focusColor: areaPalette.primary,
-              backgroundColor: areaPalette.cardBg ?? areaPalette.background,
+              backgroundColor:
+                areaPalette.cardBg ?? areaPalette.background,
             }
           : {}),
         ...(fontFamily ? { fontFamily } : {}),

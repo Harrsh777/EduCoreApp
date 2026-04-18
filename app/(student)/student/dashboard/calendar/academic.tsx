@@ -75,8 +75,10 @@ export default function StudentAcademicCalendarScreen() {
   const eventsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
     events.forEach((e: any) => {
-      if (!map[e.event_date]) map[e.event_date] = [];
-      map[e.event_date].push(e);
+      const d = e?.event_date;
+      if (!d) return;
+      if (!map[d]) map[d] = [];
+      map[d].push(e);
     });
     return map;
   }, [events]);
@@ -86,6 +88,7 @@ export default function StudentAcademicCalendarScreen() {
 
   const monthEvents = useMemo(() => {
     return events.filter((e: any) => {
+      if (!e?.event_date) return false;
       const d = new Date(e.event_date);
       return d.getMonth() === month && d.getFullYear() === year;
     });
@@ -257,7 +260,7 @@ export default function StudentAcademicCalendarScreen() {
 
               <View style={styles.typeBadge}>
                 <Text style={styles.typeText}>
-                  {e.type?.toUpperCase()}
+                  {String(e.event_type ?? e.type ?? '').toUpperCase()}
                 </Text>
               </View>
             </View>
