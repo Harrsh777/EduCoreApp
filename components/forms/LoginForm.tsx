@@ -359,6 +359,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
               autoCorrect={false}
               editable={!loading}
               themeOverrides={inputOverrides}
+              hideFloatingLabel
             />
           ) : (
             <FloatingLabelInput
@@ -369,6 +370,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
               autoCorrect={false}
               editable={!loading}
               themeOverrides={inputOverrides}
+              hideFloatingLabel
             />
           )}
           {(!useSupabase || useSupabaseTableAuth) && (role === 'teacher' || role === 'accountant') && (
@@ -380,6 +382,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
               autoCorrect={false}
               editable={!loading}
               themeOverrides={inputOverrides}
+              hideFloatingLabel
             />
           )}
           {(!useSupabase || useSupabaseTableAuth) && role === 'student' && (
@@ -389,6 +392,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
               onChangeText={setAdmissionNo}
               editable={!loading}
               themeOverrides={inputOverrides}
+              hideFloatingLabel
             />
           )}
           <FloatingLabelInput
@@ -398,6 +402,7 @@ export function LoginForm({ role, submitLabel = 'Sign in', palette: areaPalette,
             secureTextEntry={!showPassword}
             editable={!loading}
             themeOverrides={inputOverrides}
+            hideFloatingLabel
             autoCapitalize="none"
             rightAccessory={
               <Pressable

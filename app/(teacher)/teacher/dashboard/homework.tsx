@@ -101,6 +101,22 @@ export default function TeacherHomeworkScreen() {
   });
 
   const entries = (Array.isArray(diaryData) ? diaryData : []) as DiaryEntry[];
+  const stats = useMemo(() => {
+    const raw = (statsData as { total?: number; published?: number; drafts?: number; data?: Record<string, unknown> }) ?? {};
+    const data = raw.data && typeof raw.data === 'object' ? raw.data : raw;
+    const pick = (keys: string[]) => {
+      for (const k of keys) {
+        const v = (data as Record<string, unknown>)[k];
+        if (typeof v === 'number') return v;
+      }
+      return 0;
+    };
+    return {
+      total: pick(['total', 'total_entries', 'count']),
+      published: pick(['published', 'published_count']),
+      drafts: pick(['drafts', 'draft_count']),
+    };
+  }, [statsData]);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -210,6 +226,20 @@ export default function TeacherHomeworkScreen() {
             ))}
           </ScrollView>
         </View>
+        <View style={styles.statsRow}>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsLabel}>Total</Text>
+            <Text style={styles.statsValue}>{stats.total}</Text>
+          </View>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsLabel}>Published</Text>
+            <Text style={styles.statsValue}>{stats.published}</Text>
+          </View>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsLabel}>Drafts</Text>
+            <Text style={styles.statsValue}>{stats.drafts}</Text>
+          </View>
+        </View>
 
         {isLoading && entries.length === 0 ? (
           <View style={styles.loader}><ActivityIndicator size="large" color={colors.primary} /></View>
@@ -316,6 +346,10 @@ const styles = StyleSheet.create({
   content: { padding: s.lg, paddingBottom: s['3xl'] },
   addText: { fontSize: 16, fontWeight: '600', color: colors.primary },
   controls: { marginBottom: s.lg },
+  statsRow: { flexDirection: 'row', gap: s.sm, marginBottom: s.lg },
+  statsCard: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: s.md },
+  statsLabel: { ...textStyles.caption, color: colors.textMuted, marginBottom: 4 },
+  statsValue: { ...textStyles.h4, color: colors.textPrimary },
   label: { ...textStyles.caption, color: colors.textMuted, marginBottom: s.xs, marginTop: s.sm },
   chipRow: { marginBottom: s.sm },
   chip: { paddingHorizontal: s.lg, paddingVertical: s.sm, borderRadius: 9999, marginRight: s.sm, marginBottom: s.xs, backgroundColor: colors.border },

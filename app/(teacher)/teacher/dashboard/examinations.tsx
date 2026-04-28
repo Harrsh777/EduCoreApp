@@ -21,6 +21,21 @@ function formatDate(d: string) {
   }
 }
 
+function examStatus(exam: Record<string, unknown>) {
+  const raw = String(exam.status ?? '').toLowerCase();
+  if (raw.includes('lock') || raw.includes('final')) return { label: 'Finalized', bg: '#FEE2E2', text: '#B91C1C' };
+  if (raw.includes('active') || raw.includes('open')) return { label: 'Open', bg: '#DCFCE7', text: '#166534' };
+  return { label: 'Scheduled', bg: '#E0F2FE', text: '#075985' };
+}
+
+function dateWindow(exam: Record<string, unknown>) {
+  const start = String(exam.start_date ?? exam.exam_date ?? '').trim();
+  const end = String(exam.end_date ?? '').trim();
+  if (start && end) return `${formatDate(start)} - ${formatDate(end)}`;
+  if (start) return formatDate(start);
+  return 'Date TBD';
+}
+
 export default function TeacherExaminationsScreen() {
   const router = useRouter();
   const { schoolCode, teacher, path } = useTeacher();
@@ -38,7 +53,7 @@ export default function TeacherExaminationsScreen() {
     enabled: Boolean(schoolCode && teacher?.id),
   });
 
-  const exams = (Array.isArray(data) ? data : (data as { data?: unknown[] })?.data ?? []) as Array<{ id?: string; name?: string; exam_date?: string; subjects?: unknown[]; [k: string]: unknown }>;
+  const exams = (Array.isArray(data) ? data : (data as { data?: unknown[] })?.data ?? []) as Array<{ id?: string; name?: string; exam_name?: string; exam_date?: string; subjects?: unknown[]; class_name?: string; [k: string]: unknown }>;
   const byDate = useMemo(() => {
     const map: Record<string, typeof exams> = {};
     exams.forEach((e) => {
@@ -102,8 +117,16 @@ export default function TeacherExaminationsScreen() {
                 style={styles.card}
                 onPress={() => router.push(path('marks') as never)}
               >
-                <Text style={styles.cardTitle}>{exam.name ?? 'Exam'}</Text>
-                <Text style={styles.cardMeta}>Marks entry</Text>
+                <View style={styles.cardMain}>
+                  <Text style={styles.cardTitle}>{exam.name ?? exam.exam_name ?? 'Exam'}</Text>
+                  <Text style={styles.cardMeta}>{dateWindow(exam)}</Text>
+                  <Text style={styles.cardCoverage}>
+                    {(String(exam.class_name ?? exam.class ?? '').trim() || 'Assigned classes')} · {(Array.isArray(exam.subjects) ? exam.subjects.length : 0) || String(exam.subject_name ?? '').trim() ? 'Subjects mapped' : 'Subject mapping pending'}
+                  </Text>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: examStatus(exam).bg }]}>
+                  <Text style={[styles.statusPillText, { color: examStatus(exam).text }]}>{examStatus(exam).label}</Text>
+                </View>
                 <Text style={styles.chevron}>›</Text>
               </Pressable>
             ))}
@@ -130,9 +153,13 @@ const styles = StyleSheet.create({
   content: { padding: spacing[4], paddingBottom: spacing[8] },
   section: { marginBottom: spacing[6] },
   sectionTitle: { ...textStyles.h4, color: '#6B7280', marginBottom: spacing[2] },
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: spacing[4], borderRadius: 12, marginBottom: spacing[2], borderWidth: 1, borderColor: '#E5E7EB' },
-  cardTitle: { ...textStyles.body, fontWeight: '600', color: '#111827', flex: 1 },
-  cardMeta: { ...textStyles.caption, color: '#6B7280', marginRight: spacing[2] },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: spacing[4], borderRadius: 12, marginBottom: spacing[2], borderWidth: 1, borderColor: '#E5E7EB', gap: 10 },
+  cardMain: { flex: 1 },
+  cardTitle: { ...textStyles.body, fontWeight: '700', color: '#111827' },
+  cardMeta: { ...textStyles.caption, color: '#6B7280', marginTop: 2 },
+  cardCoverage: { ...textStyles.caption, color: '#94A3B8', marginTop: 2 },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  statusPillText: { ...textStyles.caption, fontWeight: '700' },
   chevron: { fontSize: 20, color: '#9CA3AF' },
   empty: { ...textStyles.body, color: '#6B7280' },
 });

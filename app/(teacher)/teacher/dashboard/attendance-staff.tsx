@@ -66,6 +66,21 @@ function monthEndStr() {
   return last.toISOString().slice(0, 10);
 }
 
+function monthWindow(offset: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + offset);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  return {
+    key: `${year}-${String(month + 1).padStart(2, '0')}`,
+    label: first.toLocaleDateString('en-US', { month: 'short' }),
+    start: first.toISOString().slice(0, 10),
+    end: last.toISOString().slice(0, 10),
+  };
+}
+
 function formatDisplayDate(dateStr: string) {
   try {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
@@ -222,6 +237,8 @@ export default function TeacherMyAttendanceScreen() {
 
   const [startDate, setStartDate] = useState(monthStartStr());
   const [endDate,   setEndDate]   = useState(monthEndStr());
+  const monthOptions = useMemo(() => [2, 1, 0, -1, -2].map((n) => monthWindow(-n)), []);
+  const selectedMonthKey = startDate.slice(0, 7);
 
   const staffRowId = teacher?.id ?? '';
   const { data, isLoading, refetch, isRefetching } = useQuery({
@@ -284,11 +301,9 @@ export default function TeacherMyAttendanceScreen() {
 
   const handleRefresh = useCallback(() => refetch(), [refetch]);
 
-  // ─── Date Range Picker (simple inline, no modal dep) ──────────────────────
-  // On press we just log — wire to DateTimePicker if needed
-  const handleDatePress = (which: 'start' | 'end') => {
-    // Placeholder: implement with @react-native-community/datetimepicker
-    // For now, show a simple nudge
+  const handleMonthSelect = (start: string, end: string) => {
+    setStartDate(start);
+    setEndDate(end);
   };
 
   return (
@@ -347,17 +362,36 @@ export default function TeacherMyAttendanceScreen() {
             </View>
 
             {/* ── Date Range Row ── */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.monthStrip}
+            >
+              {monthOptions.map((m) => {
+                const active = selectedMonthKey === m.key;
+                return (
+                  <Pressable
+                    key={m.key}
+                    style={[styles.monthChip, active && styles.monthChipActive]}
+                    onPress={() => handleMonthSelect(m.start, m.end)}
+                  >
+                    <Text style={[styles.monthChipText, active && styles.monthChipTextActive]}>{m.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
             <View style={styles.dateRangeCard}>
-              <Pressable style={styles.dateRangeBtn} onPress={() => handleDatePress('start')}>
+              <View style={styles.dateRangeBtn}>
                 <Text style={styles.dateRangeIcon}>📅</Text>
                 <Text style={styles.dateRangeText}>{formatDisplayDate(startDate)}</Text>
-              </Pressable>
+              </View>
 
               <Text style={styles.dateRangeArrow}>→</Text>
 
-              <Pressable style={styles.dateRangeBtn} onPress={() => handleDatePress('end')}>
+              <View style={styles.dateRangeBtn}>
                 <Text style={styles.dateRangeText}>{formatDisplayDate(endDate)}</Text>
-              </Pressable>
+              </View>
             </View>
 
             {/* ── Daily Log ── */}
@@ -535,6 +569,31 @@ const styles = StyleSheet.create({
     backgroundColor: C.surface,
     borderTopWidth: 1,
     borderTopColor: C.border,
+  },
+  monthStrip: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 8,
+  },
+  monthChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  monthChipActive: {
+    backgroundColor: C.green,
+    borderColor: C.green,
+  },
+  monthChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.textMid,
+  },
+  monthChipTextActive: {
+    color: '#fff',
   },
   statCard: {
     flex: 1,

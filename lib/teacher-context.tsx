@@ -192,7 +192,7 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
     }
     let cancelled = false;
     setPermissionsLoading(true);
-    Promise.all([
+    Promise.allSettled([
       rbacService.getStaffPermissionsByStaff(school_code, teacher.id).then((r) => r.data),
       teacherService
         .getClasses({
@@ -202,22 +202,42 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
           array: true,
         })
         .then((r) => r.data),
-      teacherService
-        .getTeachingAssignments({ school_code, teacher_id: teacher.id })
-        .then((r) => r.data)
-        .catch(() => null),
+      teacherService.getTeachingAssignments({ school_code, teacher_id: teacher.id }).then((r) => r.data),
       teacherService.getStaffMenu(teacher.id).then((r) => {
         const data = (r as { data?: { data?: StaffMenuModule[] } })?.data;
         const list = Array.isArray(data) ? data : (data as { data?: StaffMenuModule[] })?.data ?? [];
         return Array.isArray(list) ? list : [];
       }),
     ])
-      .then(([permsData, classesData, teachingAssignData, menuModules]) => {
+      .then(([permsResult, classesResult, teachingAssignResult, menuResult]) => {
         if (cancelled) return;
         const perms = new Set<string>();
-        const data = permsData as { data?: { modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[] }; modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[] };
-        const modules = data?.data?.modules ?? data?.modules ?? [];
-        for (const mod of modules as { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[]) {
+        const menuModules =
+          menuResult.status === 'fulfilled' && Array.isArray(menuResult.value) ? menuResult.value : [];
+
+        const data =
+          permsResult.status === 'fulfilled'
+            ? (permsResult.value as {
+                data?: { modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[] };
+                modules?: { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[];
+              })
+            : null;
+        const rbacModules = data?.data?.modules ?? data?.modules ?? [];
+
+        // Prefer explicit RBAC permissions; if RBAC endpoint fails, derive from menu access.
+        const modulesForPermissions =
+          rbacModules.length > 0
+            ? rbacModules
+            : menuModules.map((m) => ({
+                name: m.module_name,
+                sub_modules: m.sub_modules.map((s) => ({
+                  name: s.name,
+                  view_access: !!s.has_view_access,
+                  edit_access: !!s.has_edit_access,
+                })),
+              }));
+
+        for (const mod of modulesForPermissions as { name?: string; sub_modules?: { name?: string; view_access?: boolean; edit_access?: boolean }[] }[]) {
           for (const sub of mod.sub_modules ?? []) {
             const keys = mapSubModuleToPermissions(sub.name ?? '');
             if (sub.view_access) {
@@ -230,12 +250,14 @@ export function TeacherProvider({ children }: TeacherProviderProps) {
           }
         }
         setPermissions(perms);
+        const classesData = classesResult.status === 'fulfilled' ? classesResult.value : [];
         const list = Array.isArray(classesData)
           ? classesData
           : (classesData as { data?: unknown[] })?.data ?? (classesData as { classes?: unknown[] })?.classes ?? [];
         setIsClassTeacher(Array.isArray(list) && list.length > 0);
+        const teachingAssignData = teachingAssignResult.status === 'fulfilled' ? teachingAssignResult.value : null;
         setHasTeachingAssignments(hasTeachingAssignmentsData(teachingAssignData));
-        setStaffMenuModules(Array.isArray(menuModules) ? menuModules : []);
+        setStaffMenuModules(menuModules);
       })
       .catch(() => {
         if (!cancelled) {

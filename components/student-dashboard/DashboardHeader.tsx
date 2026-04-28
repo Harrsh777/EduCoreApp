@@ -24,7 +24,6 @@ function getGreeting(): string {
 
 type DashboardHeaderProps = {
   studentName: string;
-  onNotificationPress?: () => void;
   onMessagesPress?: () => void;
   onProfilePress?: () => void;
   avatarSource?: { uri: string } | null;
@@ -32,7 +31,6 @@ type DashboardHeaderProps = {
 
 export function DashboardHeader({
   studentName,
-  onNotificationPress,
   onMessagesPress,
   onProfilePress,
 }: DashboardHeaderProps) {
@@ -65,16 +63,6 @@ export function DashboardHeader({
               accessibilityLabel="Messages"
             >
               <Ionicons name="chatbubble-outline" size={22} color={colors.primaryBright} />
-            </Pressable>
-          ) : null}
-          {onNotificationPress ? (
-            <Pressable
-              onPress={onNotificationPress}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconPressed]}
-              accessibilityLabel="Notifications"
-            >
-              <Ionicons name="notifications-outline" size={22} color={colors.primaryBright} />
-              <View style={styles.notifBadge} />
             </Pressable>
           ) : null}
           {onProfilePress ? (
@@ -172,14 +160,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     borderWidth: 2,
     borderColor: '#FFFFFF',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.danger,
   },
 });

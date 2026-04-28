@@ -1,6 +1,6 @@
 /**
  * StudentTabBar — bridges React Navigation tab state → BottomNavBar.
- * 4 tabs: Home, Calendar, Messages, Profile.
+ * 4 tabs: Home, My Class, Attendance, Profile.
  */
 
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -8,15 +8,15 @@ import { BottomNavBar, type StudentTab } from './BottomNavBar';
 
 const ROUTE_TO_TAB: Record<string, StudentTab> = {
   index: 'home',
-  calendar: 'calendar',
-  messages: 'messages',
+  'my-school': 'calendar',
+  attendance: 'messages',
   profile: 'profile',
 };
 
 const TAB_TO_ROUTE: Record<StudentTab, string> = {
   home: 'index',
-  calendar: 'calendar',
-  messages: 'messages',
+  calendar: 'my-school',
+  messages: 'attendance',
   profile: 'profile',
 };
 

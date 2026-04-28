@@ -121,6 +121,8 @@ export default function TeacherMyClassScreen() {
   const students = (
     Array.isArray(studentsData) ? studentsData : (studentsData as { data?: unknown[] })?.data ?? []
   ) as Array<{ id: string; name?: string; admission_no?: string; student_name?: string; full_name?: string }>;
+  const classLabel = selectedClass ? classChipLabel(selectedClass) : '';
+  const classStrength = students.length;
 
   useEffect(() => {
     if (classesList.length > 0 && !selectedClassId) setSelectedClassId(classesList[0].id);
@@ -155,6 +157,35 @@ export default function TeacherMyClassScreen() {
         )}
         {selectedClassId && (
           <>
+            <View style={styles.profileCard}>
+              <Text style={styles.profileTitle}>Class Profile</Text>
+              <View style={styles.profileGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Class</Text>
+                  <Text style={styles.statValue}>{classLabel || '—'}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Section</Text>
+                  <Text style={styles.statValue}>{selectedClass?.section ?? '—'}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Strength</Text>
+                  <Text style={styles.statValue}>{classStrength}</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Academic Year</Text>
+                  <Text style={styles.statValue}>{selectedClass?.academic_year ?? '—'}</Text>
+                </View>
+              </View>
+              <View style={styles.quickActions}>
+                <Pressable style={styles.quickActionBtn} onPress={() => router.push(path('attendance') as never)}>
+                  <Text style={styles.quickActionText}>Take Attendance</Text>
+                </Pressable>
+                <Pressable style={styles.quickActionBtn} onPress={() => router.push(path('students') as never)}>
+                  <Text style={styles.quickActionText}>Open Roster</Text>
+                </Pressable>
+              </View>
+            </View>
             <Text style={styles.sectionTitle}>Timetable</Text>
             {loadingSlots ? (
               <ActivityIndicator size="small" color={TEACHER_GREEN} style={styles.loader} />
@@ -202,6 +233,36 @@ const styles = StyleSheet.create({
   chipRow: { marginBottom: spacing[4] },
   chip: { paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: 8, marginRight: spacing[2], backgroundColor: '#E5E7EB' },
   chipText: { ...textStyles.body, color: '#374151' },
+  profileCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    padding: spacing[3],
+    marginBottom: spacing[2],
+  },
+  profileTitle: { ...textStyles.body, fontWeight: '700', color: '#111827', marginBottom: spacing[2] },
+  profileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  statBox: {
+    width: '48%',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: spacing[2],
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  statLabel: { ...textStyles.caption, color: '#6B7280' },
+  statValue: { ...textStyles.bodySm, color: '#111827', fontWeight: '600', marginTop: 2 },
+  quickActions: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[3] },
+  quickActionBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DCFCE7',
+  },
+  quickActionText: { ...textStyles.bodySm, color: '#166534', fontWeight: '700' },
   sectionTitle: { ...textStyles.h4, color: '#111827', marginTop: spacing[4], marginBottom: spacing[2] },
   loader: { marginVertical: spacing[4] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[4] },

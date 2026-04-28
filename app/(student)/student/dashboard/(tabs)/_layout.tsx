@@ -1,5 +1,5 @@
 /**
- * Student dashboard tabs: Home, Calendar, Messages, Profile.
+ * Student dashboard tabs: Home, My Class, Attendance, Profile.
  * Glass blur bottom nav.
  */
 
@@ -21,12 +21,13 @@ export default function StudentTabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="calendar" options={{ title: 'Calendar' }} />
-      <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
+      <Tabs.Screen name="my-school" options={{ title: 'My Class' }} />
+      <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       <Tabs.Screen name="academics" options={{ href: null }} />
       <Tabs.Screen name="requests" options={{ href: null }} />
-      <Tabs.Screen name="my-school" options={{ href: null }} />
+      <Tabs.Screen name="calendar" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="dashboard" options={{ href: null }} />
     </Tabs>
   );

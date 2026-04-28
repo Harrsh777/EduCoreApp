@@ -7,7 +7,10 @@ import { api } from '@/lib/api';
 const p = (school_code: string, extra?: Record<string, string>) => ({ params: { school_code, ...extra } });
 
 /** GET /api/timetable/slots */
-export function getTimetableSlots(school_code: string, params?: { class_id?: string; teacher_id?: string }) {
+export function getTimetableSlots(
+  school_code: string,
+  params?: { class_id?: string; teacher_id?: string; staff_id?: string }
+) {
   return api.get('/api/timetable/slots', p(school_code, params as Record<string, string>));
 }
 

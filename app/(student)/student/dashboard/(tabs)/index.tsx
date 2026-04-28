@@ -4,42 +4,42 @@
  * No duplicate stats. Container pattern; animation only on native (no transform).
  */
 
-import { useRouter, useNavigation } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Animated,
-  Platform,
-} from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { useStudent } from '@/lib/student-context';
+  DashboardHeader,
+  DashboardHomeGrid,
+  HomeListCard,
+  LoadingSkeleton,
+  ModuleButton,
+  SectionCard,
+  type HomeListItem,
+} from '@/components/student-dashboard';
+import { STUDENT_DASHBOARD_SECTIONS } from '@/constants/studentDashboardMenu';
+import { useStudentClassTeacherCard } from '@/hooks/useStudentClassTeacherCard';
 import { env } from '@/lib/env';
+import { useStudent } from '@/lib/student-context';
 import { summarizeTransportForHome } from '@/lib/student-transport-home';
-import { getStudentByAdmissionNo } from '@/services/school.service';
 import { extractStudentFeesRows } from '@/lib/studentFeesV2';
+import { communicationService } from '@/services/communication.service';
+import { getStudentByAdmissionNo } from '@/services/school.service';
 import {
   countActiveReceipts,
   getDashboardHomeStats,
   invalidateDashboardCache,
   sumFeesDueInMonthAndQuarter,
 } from '@/services/student-dashboard.service';
-import { communicationService } from '@/services/communication.service';
 import { studentService } from '@/services/student.service';
-import {
-  DashboardHeader,
-  SectionCard,
-  ModuleButton,
-  LoadingSkeleton,
-  DashboardHomeGrid,
-  HomeListCard,
-  type HomeListItem,
-} from '@/components/student-dashboard';
-import { useStudentClassTeacherCard } from '@/hooks/useStudentClassTeacherCard';
 import { studentDashboardTheme } from '@/theme/studentDashboard';
-import { STUDENT_DASHBOARD_SECTIONS } from '@/constants/studentDashboardMenu';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigation, useRouter } from 'expo-router';
+import React, { useCallback, useMemo } from 'react';
+import {
+  Animated,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 const { colors, screenRootWeb, spacing: s } = studentDashboardTheme;
 
@@ -393,7 +393,6 @@ export default function StudentDashboardHomeScreen() {
           <DashboardHeader
             studentName={fullName}
             onMessagesPress={() => handleModulePress('communication')}
-            onNotificationPress={() => {}}
             onProfilePress={() => (navigation as { navigate: (name: string) => void }).navigate('profile')}
           />
         </Container>
@@ -432,7 +431,7 @@ export default function StudentDashboardHomeScreen() {
         </Container>
 
         <Container>
-          <SectionCard title="Explore Modules" gridColumns={3}>
+          <SectionCard title="Explore Modules">
             {[
               { id: 'my-class', label: 'My Class', path: 'class', icon: 'school' as const },
               { id: 'exams', label: 'Exams', path: 'examinations', icon: 'document-text' as const },
@@ -453,10 +452,7 @@ export default function StudentDashboardHomeScreen() {
 
         {STUDENT_DASHBOARD_SECTIONS.map((section) => (
           <Container key={section.id}>
-            <SectionCard
-              title={section.title}
-              gridColumns={section.id === 'academics' ? 3 : undefined}
-            >
+            <SectionCard title={section.title}>
               {section.modules.map((mod) => (
                 <ModuleButton
                   key={mod.id}
@@ -478,6 +474,7 @@ export default function StudentDashboardHomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    marginTop: 15,
     backgroundColor: colors.backgroundStart,
     ...screenRootWeb,
   },

@@ -26,7 +26,12 @@ import { studentService } from '@/services/student.service';
 import { studentDashboardTheme } from '@/theme/studentDashboard';
 import { textStyles } from '@/theme/typography';
 
-const { colors, spacing: s, cardRadius, webSolid } = studentDashboardTheme;
+const { colors, spacing: s, cardRadius, webSolid, screenRootWeb } = studentDashboardTheme;
+const textNoShadow = {
+  textShadowColor: 'transparent' as const,
+  textShadowOffset: { width: 0, height: 0 },
+  textShadowRadius: 0,
+};
 
 type ReportCardItem = {
   id: string;
@@ -42,7 +47,13 @@ type ReportCardItem = {
 };
 
 function normalizeList(raw: unknown): ReportCardItem[] {
-  const arr = Array.isArray(raw) ? raw : (raw as { data?: unknown[] })?.data ?? [];
+  const body = (raw as { data?: unknown })?.data ?? raw;
+  const arr = Array.isArray(body)
+    ? body
+    : (body as { data?: unknown[]; report_cards?: unknown[]; reportCards?: unknown[] })?.data ??
+      (body as { report_cards?: unknown[]; reportCards?: unknown[] })?.report_cards ??
+      (body as { report_cards?: unknown[]; reportCards?: unknown[] })?.reportCards ??
+      [];
   return (arr as ReportCardItem[]).map((item) => ({
     ...item,
     title: item.title ?? item.name ?? 'Report Card',
@@ -66,11 +77,10 @@ export default function StudentReportCardScreen() {
   const router = useRouter();
   const { student, schoolCode } = useStudent();
   const studentId = student?.id ?? '';
-  const canFetch = Boolean(schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no)));
 
-  const { data: rawData, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['student', 'report-cards', schoolCode, studentId, student?.admission_no],
-    queryFn: async (): Promise<unknown> => {
+  const { data: effectiveStudentId = '' } = useQuery({
+    queryKey: ['student', 'effective-id', schoolCode, studentId, student?.admission_no],
+    queryFn: async (): Promise<string> => {
       let effectiveId = studentId;
       if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
         try {
@@ -81,8 +91,19 @@ export default function StudentReportCardScreen() {
           // keep studentId
         }
       }
-      if (!effectiveId) return [];
-      const r = await studentService.getReportCardList({ school_code: schoolCode, student_id: effectiveId });
+      return effectiveId;
+    },
+    enabled: Boolean(schoolCode && (studentId || (env.USE_SUPABASE_DASHBOARD && student?.admission_no))),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const canFetch = Boolean(schoolCode && effectiveStudentId);
+
+  const { data: rawData, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['student', 'report-cards', schoolCode, effectiveStudentId],
+    queryFn: async (): Promise<unknown> => {
+      if (!effectiveStudentId) return [];
+      const r = await studentService.getReportCardList({ school_code: schoolCode, student_id: effectiveStudentId });
       return (r as { data?: unknown }).data ?? r;
     },
     enabled: canFetch,
@@ -99,8 +120,9 @@ export default function StudentReportCardScreen() {
   }, [list]);
 
   const openReport = (id: string, action: 'view' | 'download') => {
+    if (!id || !schoolCode || !effectiveStudentId) return;
     const base = env.API_BASE_URL || '';
-    const url = `${base}/api/marks/report-card/${id}?student_id=${studentId}&school_code=${schoolCode}`;
+    const url = `${base}/api/marks/report-card/${id}?student_id=${effectiveStudentId}&school_code=${schoolCode}`;
     if (Platform.OS === 'web') {
       window.open(url, '_blank', action === 'download' ? 'noopener' : undefined);
     } else {
@@ -217,7 +239,11 @@ export default function StudentReportCardScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.backgroundStart },
+  root: {
+    flex: 1,
+    backgroundColor: colors.backgroundStart,
+    ...screenRootWeb,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -230,15 +256,15 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: s.sm, marginRight: s.sm, marginTop: 2 },
   headerCenter: { flex: 1, minWidth: 0 },
-  title: { ...textStyles.h4, color: colors.textPrimary },
-  description: { ...textStyles.caption, color: colors.textSecondary, marginTop: 4 },
+  title: { ...textStyles.h4, color: colors.textPrimary, ...textNoShadow },
+  description: { ...textStyles.caption, color: colors.textSecondary, marginTop: 4, ...textNoShadow },
   yearPill: {
     backgroundColor: colors.primaryLight,
     paddingHorizontal: s.md,
     paddingVertical: 6,
     borderRadius: 10,
   },
-  yearPillText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  yearPillText: { fontSize: 14, fontWeight: '600', color: colors.primary, ...textNoShadow },
   scroll: { flex: 1 },
   content: { padding: s.lg, paddingBottom: s['3xl'] },
   loader: { marginVertical: s['2xl'] },
@@ -259,8 +285,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: s.lg,
   },
-  emptyTitle: { ...textStyles.h4, color: colors.textPrimary },
-  emptySubtitle: { ...textStyles.body, color: colors.textSecondary, marginTop: s.sm, textAlign: 'center' },
+  emptyTitle: { ...textStyles.h4, color: colors.textPrimary, ...textNoShadow },
+  emptySubtitle: { ...textStyles.body, color: colors.textSecondary, marginTop: s.sm, textAlign: 'center', ...textNoShadow },
 
   mainCard: {
     backgroundColor: colors.surface,
@@ -282,11 +308,11 @@ const styles = StyleSheet.create({
   },
   mainCardMeta: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: s.sm },
-  reportTitle: { ...textStyles.h4, color: colors.textPrimary },
+  reportTitle: { ...textStyles.h4, color: colors.textPrimary, ...textNoShadow },
   availableBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   availableDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  availableText: { fontSize: 11, fontWeight: '600', color: colors.success },
-  sentDate: { ...textStyles.caption, color: colors.textSecondary, marginTop: 4 },
+  availableText: { fontSize: 11, fontWeight: '600', color: colors.success, ...textNoShadow },
+  sentDate: { ...textStyles.caption, color: colors.textSecondary, marginTop: 4, ...textNoShadow },
   previewBars: { marginTop: s.xl, marginBottom: s.lg },
   previewBar: { height: 6, borderRadius: 3, backgroundColor: webSolid.borderSubtle, marginBottom: 8 },
   previewBar1: { width: '100%' },
@@ -304,7 +330,7 @@ const styles = StyleSheet.create({
     borderColor: webSolid.borderCard,
     gap: s.sm,
   },
-  viewBtnText: { ...textStyles.body, fontWeight: '600', color: colors.textPrimary },
+  viewBtnText: { ...textStyles.body, fontWeight: '600', color: colors.textPrimary, ...textNoShadow },
   downloadBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -315,7 +341,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     gap: s.sm,
   },
-  downloadBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  downloadBtnText: { fontSize: 15, fontWeight: '600', color: '#fff', ...textNoShadow },
 
   pastSection: { marginTop: s.lg },
   pastSectionTitle: {
@@ -324,6 +350,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
     marginBottom: s.md,
+    ...textNoShadow,
   },
   pastRow: {
     flexDirection: 'row',
@@ -343,6 +370,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pastRowLabel: { flex: 1, ...textStyles.body, fontWeight: '600', color: colors.textPrimary },
+  pastRowLabel: { flex: 1, ...textStyles.body, fontWeight: '600', color: colors.textPrimary, ...textNoShadow },
   bottomPad: { height: 80 },
 });

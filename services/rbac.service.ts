@@ -12,8 +12,18 @@ export function getStaffPermissions(school_code: string) {
 }
 
 /** GET /api/rbac/staff-permissions/[staffId]?school_code= */
-export function getStaffPermissionsByStaff(school_code: string, staffId: string) {
-  return api.get(`/api/rbac/staff-permissions/${staffId}`, p(school_code));
+export async function getStaffPermissionsByStaff(school_code: string, staffId: string) {
+  try {
+    // On current deployment, staff-specific route may not exist. Use list API first to avoid repeated 404s.
+    return await api.get('/api/rbac/staff-permissions', { params: { school_code, staff_id: staffId } });
+  } catch (error: unknown) {
+    // Fallback for deployments where staff-scoped RBAC is unstable/unsupported.
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 400 || status === 404 || status === 500) {
+      return api.get('/api/rbac/staff-permissions', p(school_code));
+    }
+    throw error;
+  }
 }
 
 /** PATCH staff permissions (upsert staff_permissions) */

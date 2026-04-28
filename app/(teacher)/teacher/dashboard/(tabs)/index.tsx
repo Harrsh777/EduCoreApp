@@ -5,33 +5,34 @@
  * My Timetable (Current / Next) → Recent Submissions.
  */
 
-import { useRouter } from 'expo-router';
-import React, { useMemo, useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  RefreshControl,
-  TextInput,
-  ActivityIndicator,
-} from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTeacher } from '@/lib/teacher-context';
+import { Card, PrimaryButton } from '@/components/teacher';
 import { useAuthStore } from '@/lib/auth-store';
-import { teacherService } from '@/services/teacher.service';
-import { communicationService } from '@/services/communication.service';
+import { useTeacher } from '@/lib/teacher-context';
 import { calendarService } from '@/services/calendar.service';
+import { communicationService } from '@/services/communication.service';
+import { diaryService } from '@/services/diary.service';
+import { instituteService } from '@/services/institute.service';
 import { leaveService } from '@/services/leave.service';
 import { schoolService } from '@/services/school.service';
-import { instituteService } from '@/services/institute.service';
+import { teacherService } from '@/services/teacher.service';
 import { timetableService } from '@/services/timetable.service';
-import { diaryService } from '@/services/diary.service';
 import { teacherDashboardTheme } from '@/theme/teacherDashboard';
 import { textStyles } from '@/theme/typography';
-import { Card, PrimaryButton } from '@/components/teacher';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 const { colors, spacing: s, cardRadius } = teacherDashboardTheme;
 
@@ -225,6 +226,7 @@ export default function TeacherDashboardHomeScreen() {
   const { teacher, schoolCode, path, isClassTeacher, hasTeachingAssignments } = useTeacher();
   const profile = useAuthStore((s) => s.profile);
   const teacherId = teacher?.id ?? '';
+  const timetableTeacherId = teacher?.id ?? teacher?.staff_id ?? '';
   /** Backend staff_id query param: employee code (e.g. STF001) when available */
   const staffIdForAttendance = (teacher?.staff_id?.trim() || teacherId) || '';
 
@@ -306,9 +308,12 @@ export default function TeacherDashboardHomeScreen() {
     enabled: Boolean(schoolCode && teacherId),
   });
   const { data: timetableData } = useQuery({
-    queryKey: ['teacher', 'timetable', schoolCode, teacherId],
-    queryFn: () => timetableService.getTimetableSlots(schoolCode, { teacher_id: teacherId }).then((r) => r.data),
-    enabled: Boolean(schoolCode && teacherId),
+    queryKey: ['teacher', 'timetable', schoolCode, timetableTeacherId, teacher?.staff_id],
+    queryFn: () =>
+      timetableService
+        .getTimetableSlots(schoolCode, { teacher_id: timetableTeacherId, staff_id: teacher?.staff_id })
+        .then((r) => r.data),
+    enabled: Boolean(schoolCode && (timetableTeacherId || teacher?.staff_id)),
   });
   const { data: calendarNotifData } = useQuery({
     queryKey: ['calendar', 'notifications', schoolCode, teacherId],
@@ -382,7 +387,10 @@ export default function TeacherDashboardHomeScreen() {
     return `Class Teacher • ${year}`;
   }, [classesList, isClassTeacher]);
 
-  const staffAttList = Array.isArray(staffAttData) ? staffAttData : (staffAttData as { data?: unknown[] })?.data ?? [];
+  const staffAttRaw = Array.isArray(staffAttData)
+    ? staffAttData
+    : (staffAttData as { data?: unknown[] } | undefined)?.data ?? [];
+  const staffAttList = staffAttRaw as Array<{ status?: string }>;
   const staffAttendancePercent = useMemo(() => {
     if (staffAttList.length === 0) return 0;
     const present = staffAttList.filter((a: { status?: string }) => (a.status ?? '').toLowerCase() === 'present').length;
@@ -412,15 +420,15 @@ export default function TeacherDashboardHomeScreen() {
   }, [examsList]);
   const upcomingExamsCount = examsList.filter((e: { status?: string }) => (e.status ?? '').toLowerCase() !== 'completed').length;
 
-  const pendingLeaveList = Array.isArray(pendingLeaveData) ? pendingLeaveData : (pendingLeaveData as unknown[] ?? []);
+  const pendingLeaveList = Array.isArray(pendingLeaveData) ? pendingLeaveData : (pendingLeaveData as unknown as unknown[] ?? []);
   const pendingLeaveCount = pendingLeaveList.length;
 
   const gradeDist = useMemo(() => {
     const raw = gradeDistData as { data?: { A_B?: number; C_D?: number; below_E?: number; pass_rate?: number; [k: string]: unknown }; A_B?: number; C_D?: number; below_E?: number; pass_rate?: number } | undefined;
     const d = raw?.data ?? raw ?? {};
-    const aB = Number(d.A_B ?? d.a_b ?? 0);
-    const cD = Number(d.C_D ?? d.c_d ?? 0);
-    const belowE = Number(d.below_E ?? d.below_e ?? 0);
+    const aB = Number(d.A_B ?? d.A_B ?? 0);
+    const cD = Number(d.C_D ?? d.C_D ?? 0);
+    const belowE = Number(d.below_E ?? d.below_E ?? 0);
     const total = aB + cD + belowE || 1;
     const passRate = Number(d.pass_rate ?? 0) || Math.round(((aB + cD) / total) * 100);
     return { aB, cD, belowE, total, passRate };
@@ -521,6 +529,10 @@ export default function TeacherDashboardHomeScreen() {
     () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
     []
   );
+  const academicYearLabel = useMemo(() => {
+    const year = new Date().getFullYear();
+    return `${year}-${year + 1}`;
+  }, []);
   const calendarNotifs = (Array.isArray(calendarNotifData) ? calendarNotifData : []) as { read?: boolean }[];
   const unreadNotifCount = calendarNotifs.filter((n) => !n.read).length;
 
@@ -534,15 +546,19 @@ export default function TeacherDashboardHomeScreen() {
           <RefreshControl refreshing={!!isRefetching} onRefresh={refetch} tintColor={colors.primary} />
         }
       >
-        {/* Header: school row → avatar + welcome / name / date (no overlap) */}
         <View style={styles.header}>
-          <View style={styles.headerMain}>
+          <LinearGradient
+            colors={['#E6FFF2', '#D1FAE5', '#BBF7D0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.welcomeCard}
+          >
             <View style={styles.headerTopRow}>
               <Text style={styles.schoolName} numberOfLines={2}>
                 {schoolDisplayName}
               </Text>
               <Pressable style={styles.bellWrap} onPress={() => router.push(path('communication') as never)}>
-                <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
+                <Ionicons name="notifications-outline" size={22} color="#14532D" />
                 {unreadNotifCount > 0 ? (
                   <View style={styles.bellBadge}>
                     <Text style={styles.bellBadgeText}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</Text>
@@ -551,29 +567,44 @@ export default function TeacherDashboardHomeScreen() {
               </Pressable>
             </View>
             <View style={styles.headerBodyRow}>
+              <View style={styles.headerTextCol}>
+                <View style={styles.welcomeRow}>
+                  <Text style={styles.welcomeSmall}>Welcome 👋</Text>
+                  <Text style={styles.teacherNameInline} numberOfLines={1}>
+                    {displayTeacherName}
+                  </Text>
+                </View>
+                <View style={styles.headerMetaRow}>
+                  <Text style={styles.headerDate}>{todayFormatted}</Text>
+                  <View style={styles.headerMetaPill}>
+                    <Text style={styles.headerMetaPillText}>
+                      {`${isClassTeacher ? 'Class Teacher' : 'Class Teacher'} • ${academicYearLabel}`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{(displayTeacherName || 'T').charAt(0).toUpperCase()}</Text>
               </View>
-              <View style={styles.headerTextCol}>
-                <Text style={styles.welcomeSmall}>Welcome 👋</Text>
-                <Text style={styles.teacherName} numberOfLines={2}>
-                  {displayTeacherName}
-                </Text>
-                <Text style={styles.headerDate}>{todayFormatted}</Text>
-                {classTeacherLabel ? (
-                  <View style={[styles.pill, styles.pillBelowDate]}>
-                    <Text style={styles.pillText}>{classTeacherLabel}</Text>
-                  </View>
-                ) : null}
-              </View>
             </View>
-          </View>
+          </LinearGradient>
         </View>
 
         {/* Assigned Class Card (class teacher only) */}
         {isClassTeacher && classesList.length > 0 && (() => {
-          const first = classesList[0] as { id?: string; name?: string; class_name?: string; section?: string; student_count?: number };
-          const clsName = first?.class_name ?? first?.name ?? 'Class';
+          const first = classesList[0] as {
+            id?: string;
+            name?: string;
+            class?: string | number;
+            class_name?: string;
+            section?: string;
+            student_count?: number;
+          };
+          const clsCandidates = [first?.class_name, first?.class, first?.name]
+            .map((v) => String(v ?? '').trim())
+            .filter(Boolean)
+            .filter((v) => v.toLowerCase() !== 'class');
+          const clsName = clsCandidates[0] ?? 'Class';
           const sec = first?.section ?? '';
           const count = first?.student_count ?? 0;
           return (
@@ -672,10 +703,16 @@ export default function TeacherDashboardHomeScreen() {
               {upcomingExamsTop3.map((exam: { id?: string; name?: string; start_date?: string }, i: number) => (
                 <View key={exam.id ?? i} style={styles.summaryRow}>
                   <Text style={styles.summaryRowText} numberOfLines={1}>{exam.name ?? 'Exam'}</Text>
-                  <Text style={styles.summaryRowMeta}>{exam.start_date ?? '—'}</Text>
+                  <View style={styles.metaPill}>
+                    <Text style={styles.summaryRowMeta}>{exam.start_date ?? '—'}</Text>
+                  </View>
                 </View>
               ))}
-              <View style={styles.summaryCardBtnWrap}><PrimaryButton title="Examinations" onPress={() => router.push(path('examinations') as never)} /></View>
+              <View style={styles.summaryCardBtnWrap}>
+                <Pressable style={styles.smallActionBtn} onPress={() => router.push(path('examinations') as never)}>
+                  <Text style={styles.smallActionText}>Examinations</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </Card>
@@ -696,10 +733,16 @@ export default function TeacherDashboardHomeScreen() {
               {noticesTop5.map((n: { id?: string; title?: string; created_at?: string }, i: number) => (
                 <View key={n.id ?? i} style={styles.summaryRow}>
                   <Text style={styles.summaryRowText} numberOfLines={1}>{n.title ?? 'Notice'}</Text>
-                  <Text style={styles.summaryRowMeta}>{n.created_at ? new Date(n.created_at).toLocaleDateString() : '—'}</Text>
+                  <View style={styles.metaPill}>
+                    <Text style={styles.summaryRowMeta}>{n.created_at ? new Date(n.created_at).toLocaleDateString() : '—'}</Text>
+                  </View>
                 </View>
               ))}
-              <View style={styles.summaryCardBtnWrap}><PrimaryButton title="Communication" onPress={() => router.push(path('communication') as never)} /></View>
+              <View style={styles.summaryCardBtnWrap}>
+                <Pressable style={styles.smallActionBtn} onPress={() => router.push(path('communication') as never)}>
+                  <Text style={styles.smallActionText}>Communication</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </Card>
@@ -712,6 +755,22 @@ export default function TeacherDashboardHomeScreen() {
             <Pressable onPress={() => router.push(path('my-timetable') as never)}>
               <Text style={styles.viewFull}>View Full</Text>
             </Pressable>
+          </View>
+          <View style={styles.todaySlotsList}>
+            {todaySlots.length === 0 ? (
+              <Text style={styles.emptyText}>No timetable entries for today</Text>
+            ) : (
+              todaySlots.slice(0, 4).map((slot, i) => (
+                <View key={`${slot.start_time ?? 'slot'}-${i}`} style={styles.todaySlotRow}>
+                  <Text style={styles.todaySlotTime}>
+                    {formatTime(slot.start_time, slot.end_time) || '—'}
+                  </Text>
+                  <Text style={styles.todaySlotLabel} numberOfLines={1}>
+                    {slot.subject ?? 'Class'} ({slot.class_name ?? '—'})
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
           <View style={styles.timetableRow}>
             {currentSlot ? (
@@ -889,13 +948,30 @@ export default function TeacherDashboardHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.backgroundStart },
+  root: { flex: 1, backgroundColor: '#ECFDF3' },
   scroll: { flex: 1 },
-  content: { padding: s.lg, paddingBottom: s['3xl'] },
+  content: {
+    paddingHorizontal: s.lg,
+    paddingTop: s.md,
+    paddingBottom: s['3xl'],
+    gap: s.md,
+  },
 
   header: {
     marginBottom: s.md,
     paddingVertical: s.xs,
+  },
+  welcomeCard: {
+    borderRadius: 16,
+    paddingHorizontal: s.md,
+    paddingVertical: s.md,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 3,
   },
   headerMain: { width: '100%' },
   headerTopRow: {
@@ -915,67 +991,104 @@ const styles = StyleSheet.create({
     paddingRight: s.xs,
   },
   headerBodyRow: {
-    flexDirection: 'column',
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: s.sm,
   },
   headerTextCol: {
-    width: '100%',
-    alignItems: 'center',
+    flex: 1,
+    alignItems: 'flex-start',
     minWidth: 0,
+  },
+  welcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 0,
   },
   welcomeSmall: {
     fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted,
-    marginBottom: 2,
-    textAlign: 'center',
+    fontWeight: '600',
+    color: '#166534',
+    marginBottom: 0,
+    textAlign: 'left',
+  },
+  teacherNameInline: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#052E16',
+    flexShrink: 1,
   },
   teacherName: {
     ...textStyles.h3,
-    color: colors.textPrimary,
-    marginBottom: 2,
-    textAlign: 'center',
+    color: '#052E16',
+    marginBottom: 0,
+    textAlign: 'left',
+    lineHeight: 24,
   },
   headerDate: {
     fontSize: 13,
-    color: colors.textMuted,
-    marginBottom: 2,
-    textAlign: 'center',
+    color: '#166534',
+    marginBottom: 0,
+    textAlign: 'left',
+    fontWeight: '500',
+  },
+  headerMetaPill: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  headerMetaPillText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '600',
   },
   pillBelowDate: { marginTop: s.xs, alignSelf: 'center' },
   bellWrap: { position: 'relative', padding: s.sm, marginTop: -4 },
   bellBadge: { position: 'absolute', top: 0, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   bellBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   pill: {
-    alignSelf: 'center',
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: s.md,
-    paddingVertical: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(22, 101, 52, 0.12)',
+    borderColor: '#6EE7B7',
     shadowOpacity: 0,
     shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },
   pillText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
-    color: colors.primaryDark,
-    textAlign: 'center',
+    color: '#166534',
+    textAlign: 'left',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primaryLight,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#86EFAC',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
-  avatarText: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  avatarText: { fontSize: 20, fontWeight: '800', color: '#14532D' },
   avatarDot: {
     position: 'absolute',
     bottom: 2,
@@ -988,16 +1101,21 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
 
-  heroRow: { flexDirection: 'row', gap: s.sm, marginBottom: s.lg },
+  heroRow: {
+    flexDirection: 'row',
+    gap: s.sm,
+    marginBottom: s.lg,
+  },
   heroCard: {
     flex: 1,
-    backgroundColor: colors.surface,
+    minWidth: 0,
+    backgroundColor: '#F3FFF7',
     borderRadius: 12,
     paddingVertical: s.sm,
     paddingHorizontal: s.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#BBF7D0',
     minHeight: 0,
   },
   ringWrap: { position: 'relative', marginBottom: 4 },
@@ -1015,13 +1133,71 @@ const styles = StyleSheet.create({
   heroSubtext: { fontSize: 10, color: colors.textMuted, marginTop: 2, marginBottom: 0, textAlign: 'center', lineHeight: 14 },
   heroCardBtnWrap: { marginTop: s.sm, alignSelf: 'stretch' },
 
-  summaryCard: { marginBottom: s.lg },
-  summaryCount: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  summaryCard: {
+    marginBottom: s.lg,
+    backgroundColor: '#F7FFF9',
+    borderColor: '#A7F3D0',
+  },
+  summaryCount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#14532D',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   summaryCardBtnWrap: { marginTop: s.md },
+  smallActionBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#16A34A',
+    borderRadius: 999,
+    paddingHorizontal: s.md,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#15803D',
+  },
+  smallActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   emptyText: { ...textStyles.caption, color: colors.textMuted, marginVertical: s.sm },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
-  summaryRowText: { ...textStyles.body, color: colors.textPrimary, flex: 1, marginRight: s.sm },
-  summaryRowMeta: { ...textStyles.caption, color: colors.textMuted },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBF7D0',
+  },
+  summaryRowText: {
+    ...textStyles.body,
+    color: '#052E16',
+    flex: 1,
+    marginRight: s.sm,
+    fontWeight: '600',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  summaryRowMeta: {
+    ...textStyles.caption,
+    color: '#065F46',
+    fontSize: 12,
+    fontWeight: '700',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  metaPill: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
 
   gradeBars: { marginTop: s.sm, gap: s.sm },
   gradeBarRow: { flexDirection: 'row', alignItems: 'center', gap: s.sm },
@@ -1044,10 +1220,10 @@ const styles = StyleSheet.create({
 
   todoInputRow: { flexDirection: 'row', gap: s.sm, marginBottom: s.md },
   todoInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: s.md, paddingVertical: s.sm, fontSize: 14, color: colors.textPrimary },
-  todoAddBtn: { backgroundColor: colors.primary, paddingHorizontal: s.lg, borderRadius: 9999, justifyContent: 'center', minWidth: 56 },
+  todoAddBtn: { backgroundColor: '#15803D', paddingHorizontal: s.lg, borderRadius: 9999, justifyContent: 'center', minWidth: 56 },
   todoAddBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
   todoList: { gap: 4 },
-  todoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: s.sm, paddingHorizontal: s.sm, backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  todoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: s.sm, paddingHorizontal: s.sm, backgroundColor: '#F3FFF7', borderRadius: 8, borderWidth: 1, borderColor: '#D1FAE5' },
   todoCheckWrap: { marginRight: s.sm },
   todoCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   todoCheckDone: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -1058,44 +1234,98 @@ const styles = StyleSheet.create({
   quickRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: s.md,
+    justifyContent: 'space-between',
+    rowGap: s.md,
+    columnGap: s.sm,
     marginBottom: s.xl,
   },
-  quickBtn: { alignItems: 'center', width: '22%', minWidth: 72 },
+  quickBtn: {
+    alignItems: 'center',
+    width: '30%',
+    minWidth: 92,
+    maxWidth: 120,
+  },
   quickIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 28,
     borderWidth: 2,
-    borderColor: colors.primaryLight,
-    backgroundColor: colors.surface,
+    borderColor: '#86EFAC',
+    backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: s.sm,
   },
-  quickLabel: { fontSize: 10, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' },
+  quickLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
 
-  section: { marginBottom: s.xl },
+  section: { marginBottom: s.xl, backgroundColor: '#F7FFF9', borderRadius: 14, borderWidth: 1, borderColor: '#DCFCE7', padding: s.md },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: s.md,
   },
-  sectionTitle: { ...textStyles.h4, color: colors.textPrimary },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.5, marginBottom: s.sm },
-  viewFull: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  sectionTitle: {
+    ...textStyles.h4,
+    color: '#14532D',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+    marginBottom: s.sm,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  viewFull: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#15803D',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   activePill: { backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   activePillText: { fontSize: 10, fontWeight: '600', color: colors.primary },
 
-  timetableRow: { flexDirection: 'row', gap: s.md },
+  timetableRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: s.md,
+  },
+  todaySlotsList: { marginBottom: s.md, gap: 6 },
+  todaySlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: s.sm,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: s.sm,
+  },
+  todaySlotTime: { fontSize: 12, fontWeight: '600', color: '#166534', minWidth: 96 },
+  todaySlotLabel: { flex: 1, fontSize: 13, color: '#14532D', fontWeight: '500' },
   timetableCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
+    flexGrow: 1,
+    flexBasis: 160,
+    backgroundColor: '#F0FDF4',
     borderRadius: cardRadius,
     padding: s.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#BBF7D0',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -1169,7 +1399,13 @@ const styles = StyleSheet.create({
   assignedClassCard: {
     marginBottom: 12,
   },
-  assignedClassRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: s.sm },
+  assignedClassRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: s.sm,
+    flexWrap: 'wrap',
+  },
   assignedClassLeft: { flex: 1, minWidth: 0 },
   assignedClassMetaRow: {
     flexDirection: 'row',
@@ -1182,7 +1418,13 @@ const styles = StyleSheet.create({
   assignedClassCount: { fontSize: 14, color: colors.textMuted, fontWeight: '500' },
 
   pendingLeaveCard: { marginBottom: 12 },
-  pendingLeaveRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  pendingLeaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
   pendingLeaveLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 2 },
   pendingLeaveCount: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
 

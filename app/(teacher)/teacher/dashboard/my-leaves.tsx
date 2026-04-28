@@ -89,9 +89,18 @@ export default function TeacherMyLeavesScreen() {
 
   const requests = (Array.isArray(requestsData) ? requestsData : []) as Request[];
   const filtered = useMemo(() => {
-    if (filter === 'all') return requests;
-    return requests.filter((r) => (r.status ?? 'pending').toLowerCase() === filter);
+    const base = filter === 'all' ? requests : requests.filter((r) => (r.status ?? 'pending').toLowerCase() === filter);
+    return [...base].sort((a, b) => String(b.start_date ?? '').localeCompare(String(a.start_date ?? '')));
   }, [requests, filter]);
+  const counts = useMemo(
+    () => ({
+      all: requests.length,
+      pending: requests.filter((r) => (r.status ?? 'pending').toLowerCase() === 'pending').length,
+      approved: requests.filter((r) => (r.status ?? 'pending').toLowerCase() === 'approved').length,
+      rejected: requests.filter((r) => (r.status ?? 'pending').toLowerCase() === 'rejected').length,
+    }),
+    [requests]
+  );
 
   if (error) {
     return (
@@ -115,6 +124,7 @@ export default function TeacherMyLeavesScreen() {
             onPress={() => setFilter(f)}
           >
             <Text style={[styles.tabText, filter === f && styles.tabTextActive]}>{f.charAt(0).toUpperCase() + f.slice(1)}</Text>
+            <Text style={[styles.tabCount, filter === f && styles.tabCountActive]}>{counts[f]}</Text>
           </Pressable>
         ))}
       </View>
@@ -173,6 +183,8 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 2, borderBottomColor: colors.primary },
   tabText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   tabTextActive: { color: colors.primary },
+  tabCount: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  tabCountActive: { color: colors.primaryDark, fontWeight: '700' },
   content: { padding: s.lg, paddingBottom: s['3xl'] },
   card: { marginBottom: s.lg },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: s.xs },

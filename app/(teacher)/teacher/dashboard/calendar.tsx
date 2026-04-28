@@ -20,6 +20,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 type CalendarEvent = { id?: string; title?: string; event_type?: string; description?: string; event_date?: string; start?: string; end?: string };
 
+function eventColor(type?: string): string {
+  const t = (type ?? '').toLowerCase();
+  if (t.includes('exam')) return '#EF4444';
+  if (t.includes('holiday')) return '#A855F7';
+  if (t.includes('meeting')) return '#F59E0B';
+  return '#16A34A';
+}
+
 function getMonthDays(year: number, month: number): (number | null)[][] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
@@ -122,6 +130,12 @@ export default function TeacherCalendarScreen() {
 
   const monthDays = useMemo(() => getMonthDays(year, month), [year, month]);
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
+  const agendaItems = useMemo(() => {
+    return allEvents
+      .map((e) => ({ ...e, date: (e.event_date ?? e.start ?? '').toString().slice(0, 10) }))
+      .filter((e) => e.date && e.date >= monthStart && e.date <= monthEnd)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [allEvents, monthEnd, monthStart]);
 
   const yearOptions = useMemo(() => {
     const y = now.getFullYear();
@@ -218,6 +232,24 @@ export default function TeacherCalendarScreen() {
             )}
           </Card>
         )}
+        <Card style={styles.eventsCard}>
+          <Text style={styles.eventsTitle}>Agenda ({MONTHS[month]} {year})</Text>
+          {agendaItems.length === 0 ? (
+            <Text style={styles.empty}>No events this month.</Text>
+          ) : (
+            agendaItems.slice(0, 12).map((e) => (
+              <View key={`${e.id ?? e.title}-${e.date}`} style={styles.agendaRow}>
+                <View style={[styles.agendaDot, { backgroundColor: eventColor(e.event_type) }]} />
+                <View style={styles.agendaContent}>
+                  <Text style={styles.agendaTitle} numberOfLines={1}>{e.title ?? 'Untitled event'}</Text>
+                  <Text style={styles.agendaMeta}>
+                    {e.date} {e.event_type ? `• ${e.event_type}` : ''}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
 
         {isLoading && allEvents.length === 0 ? (
           <View style={styles.loader}>
@@ -262,6 +294,11 @@ const styles = StyleSheet.create({
   eventTitle: { ...textStyles.body, fontWeight: '600', color: colors.textPrimary },
   eventType: { fontSize: 12, color: colors.primary, marginTop: 2 },
   eventDesc: { ...textStyles.caption, color: colors.textMuted, marginTop: 2 },
+  agendaRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: s.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  agendaDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6, marginRight: s.sm },
+  agendaContent: { flex: 1 },
+  agendaTitle: { ...textStyles.bodySm, color: colors.textPrimary, fontWeight: '600' },
+  agendaMeta: { ...textStyles.caption, color: colors.textMuted, marginTop: 2 },
   empty: { ...textStyles.caption, color: colors.textMuted },
   loader: { padding: s.lg },
   errorText: { ...textStyles.body, color: colors.danger, padding: s.lg },

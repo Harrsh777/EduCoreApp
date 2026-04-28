@@ -5,12 +5,12 @@
 import { STUDENT_HOME_TILES, studentDashboardTheme } from '@/theme/studentDashboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
   ActivityIndicator,
   Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
   type ViewProps,
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
@@ -211,7 +211,7 @@ export function DashboardHomeGrid({
               </Text>
             </>
           )}
-          <Text style={[styles.cta, { color: t2.cta }]}>Open fee statement & receipts →</Text>
+          <Text style={[styles.cta, { color: t2.cta }]}>Open fee statement →</Text>
         </Pressable>
 
         <Pressable

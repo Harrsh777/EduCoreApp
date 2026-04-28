@@ -148,7 +148,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: s.md,
   },
-  title: { ...textStyles.h4, fontWeight: '700', color: colors.primaryBright },
+  title: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   viewAll: { ...textStyles.caption, color: colors.accent, fontWeight: '700' },
   empty: { ...textStyles.body, color: colors.textMuted, paddingVertical: s.md },
   row: {

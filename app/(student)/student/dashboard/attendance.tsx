@@ -15,9 +15,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useStudent } from '@/lib/student-context';
 import { env } from '@/lib/env';
 import { getStudentByAdmissionNo } from '@/services/school.service';
@@ -59,17 +62,30 @@ function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** 30-day window: windowIndex 0 = latest 30 days (today-29..today), 1 = previous 30, etc. Same as web. */
+/** 15-day window: windowIndex 0 = latest 15 days (today-14..today), 1 = previous 15, etc. */
 function getDateRange(windowIndex: number): { start: string; end: string; label: string } {
   const end = new Date();
   end.setHours(0, 0, 0, 0);
-  end.setDate(end.getDate() - windowIndex * 30);
+  end.setDate(end.getDate() - windowIndex * 15);
   const start = new Date(end);
-  start.setDate(start.getDate() - 29);
+  start.setDate(start.getDate() - 14);
   const startStr = toLocalDateString(start);
   const endStr = toLocalDateString(end);
   const label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   return { start: startStr, end: endStr, label };
+}
+
+/** Last 30 days inclusive: today-29 .. today */
+function getLast30DaysRange(): { start: string; end: string; label: string } {
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 29);
+  return {
+    start: toLocalDateString(start),
+    end: toLocalDateString(end),
+    label: `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+  };
 }
 
 /** All dates in range (YYYY-MM-DD), local iteration to match web */
@@ -94,6 +110,31 @@ function formatDayLabel(dateStr: string): { weekday: string; date: string } {
     weekday: d2.toLocaleDateString(undefined, { weekday: 'long' }),
     date: d2.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
   };
+}
+
+function getAcademicYearRange(student: { academic_start_date?: unknown; start_date?: unknown; academic_end_date?: unknown; end_date?: unknown; academic_year?: unknown } | null): { start: string; end: string } {
+  const directStart = typeof student?.academic_start_date === 'string' ? student.academic_start_date : typeof student?.start_date === 'string' ? student.start_date : '';
+  const directEnd = typeof student?.academic_end_date === 'string' ? student.academic_end_date : typeof student?.end_date === 'string' ? student.end_date : '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(directStart) && /^\d{4}-\d{2}-\d{2}$/.test(directEnd)) {
+    return { start: directStart, end: directEnd };
+  }
+
+  const academicYear = typeof student?.academic_year === 'string' ? student.academic_year : '';
+  const yearMatches = academicYear.match(/\d{4}/g) ?? [];
+  if (yearMatches.length >= 2) {
+    const y1 = Number(yearMatches[0]);
+    const y2 = Number(yearMatches[1]);
+    if (Number.isFinite(y1) && Number.isFinite(y2)) {
+      return { start: `${y1}-04-01`, end: `${y2}-03-31` };
+    }
+  } else if (yearMatches.length === 1) {
+    const y = Number(yearMatches[0]);
+    if (Number.isFinite(y)) return { start: `${y}-04-01`, end: `${y + 1}-03-31` };
+  }
+
+  const now = new Date();
+  const currentYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return { start: `${currentYear}-04-01`, end: `${currentYear + 1}-03-31` };
 }
 
 // ─── Reusable components ───────────────────────────────────────────────────
@@ -147,6 +188,8 @@ export default function StudentAttendanceScreen() {
   const studentId = student?.id ?? '';
   const [windowIndex, setWindowIndex] = useState(0);
   const { start, end, label } = getDateRange(windowIndex);
+  const exportRange = useMemo(() => getLast30DaysRange(), []);
+  const academicRange = useMemo(() => getAcademicYearRange(student), [student]);
 
   // Backend expects student_id = students.id (UUID). With Supabase table auth, student.id may be
   // student_login.id; resolve real student UUID by admission_no when needed.
@@ -216,7 +259,108 @@ export default function StudentAttendanceScreen() {
 
   const records = Array.isArray(rawData) ? rawData : [];
 
-  const { byDate, byDateRecord, present, absent, late, notMarked, totalDays, percent, sortedDates } = useMemo(() => {
+  const { data: exportRawData } = useQuery({
+    queryKey: ['student', 'attendance', 'export-30', schoolCode, studentId, student?.admission_no, exportRange.start, exportRange.end],
+    queryFn: async (): Promise<unknown[]> => {
+      let effectiveStudentId = studentId;
+      if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
+        try {
+          const r = await getStudentByAdmissionNo(schoolCode, student.admission_no);
+          const row = (r as { data?: { id?: string } })?.data;
+          if (row?.id) effectiveStudentId = String(row.id);
+        } catch {
+          // keep studentId
+        }
+      }
+      if (!effectiveStudentId) return [];
+
+      const params = {
+        school_code: schoolCode,
+        student_id: effectiveStudentId,
+        start_date: exportRange.start,
+        end_date: exportRange.end,
+      };
+      const parse = (raw: unknown): unknown[] => {
+        const body = (raw as Record<string, unknown>)?.data ?? raw;
+        if (Array.isArray(body)) return body;
+        const list =
+          (body as Record<string, unknown>)?.data ??
+          (body as Record<string, unknown>)?.attendance ??
+          (body as Record<string, unknown>)?.records ??
+          (body as Record<string, unknown>)?.attendance_records ??
+          (body as Record<string, unknown>)?.list ??
+          [];
+        return Array.isArray(list) ? list : [];
+      };
+      try {
+        const r = await studentService.getAttendanceStudent(params);
+        return parse(r?.data ?? r);
+      } catch (e) {
+        try {
+          const r = await studentService.getAttendance(params);
+          return parse(r?.data ?? r);
+        } catch {
+          throw e;
+        }
+      }
+    },
+    enabled: canFetchAttendance,
+    retry: 1,
+    staleTime: 60 * 1000,
+  });
+  const exportRecords = Array.isArray(exportRawData) ? exportRawData : [];
+
+  const { data: summaryRawData } = useQuery({
+    queryKey: ['student', 'attendance', 'summary', schoolCode, studentId, student?.admission_no, academicRange.start, academicRange.end],
+    queryFn: async (): Promise<unknown[]> => {
+      let effectiveStudentId = studentId;
+      if (env.USE_SUPABASE_DASHBOARD && schoolCode && student?.admission_no) {
+        try {
+          const r = await getStudentByAdmissionNo(schoolCode, student.admission_no);
+          const row = (r as { data?: { id?: string } })?.data;
+          if (row?.id) effectiveStudentId = String(row.id);
+        } catch {
+          // keep studentId
+        }
+      }
+      if (!effectiveStudentId) return [];
+
+      const params = {
+        school_code: schoolCode,
+        student_id: effectiveStudentId,
+        start_date: academicRange.start,
+        end_date: academicRange.end,
+      };
+      const parse = (raw: unknown): unknown[] => {
+        const body = (raw as Record<string, unknown>)?.data ?? raw;
+        if (Array.isArray(body)) return body;
+        const list =
+          (body as Record<string, unknown>)?.data ??
+          (body as Record<string, unknown>)?.attendance ??
+          (body as Record<string, unknown>)?.records ??
+          (body as Record<string, unknown>)?.attendance_records ??
+          (body as Record<string, unknown>)?.list ??
+          [];
+        return Array.isArray(list) ? list : [];
+      };
+      try {
+        const r = await studentService.getAttendanceStudent(params);
+        return parse(r?.data ?? r);
+      } catch (e) {
+        try {
+          const r = await studentService.getAttendance(params);
+          return parse(r?.data ?? r);
+        } catch {
+          throw e;
+        }
+      }
+    },
+    enabled: canFetchAttendance,
+    retry: 1,
+  });
+  const summaryRecords = Array.isArray(summaryRawData) ? summaryRawData : [];
+
+  const { byDate, byDateRecord, sortedDates } = useMemo(() => {
     const byDate: Record<string, StatusKey> = {};
     const byDateRecord: Record<string, Record<string, unknown>> = {};
     let present = 0,
@@ -237,13 +381,32 @@ export default function StudentAttendanceScreen() {
     for (const d of allDates) {
       if (byDate[d] == null) byDate[d] = 'not_marked';
     }
-    const notMarked = allDates.length - present - absent - late;
-    const totalDays = allDates.length;
-    const markedCount = present + absent + late;
-    const percent = markedCount > 0 ? Math.round((present / markedCount) * 100) : 0;
     const sortedDates = [...allDates].sort((a, b) => b.localeCompare(a));
-    return { byDate, byDateRecord, present, absent, late, notMarked, totalDays, percent, sortedDates };
+    return { byDate, byDateRecord, sortedDates };
   }, [records, start, end]);
+
+  const { yearTotalMarked, yearPresent, yearAbsent, yearPercent } = useMemo(() => {
+    let yearPresent = 0;
+    let yearAbsent = 0;
+    const seen: Record<string, boolean> = {};
+    const toDateStr = (v: string) => (v && v.length >= 10 ? v.slice(0, 10) : '');
+    for (const row of summaryRecords as { attendance_date?: string; date?: string; status?: string }[]) {
+      const dateStr = toDateStr(String(row.attendance_date ?? row.date ?? ''));
+      if (!dateStr || seen[dateStr]) continue;
+      seen[dateStr] = true;
+      const status = getStatusKey(row.status ?? 'not_marked');
+      if (status === 'present') yearPresent++;
+      else if (status === 'absent') yearAbsent++;
+    }
+    const yearTotalMarked = yearPresent + yearAbsent;
+    const yearPercent = yearTotalMarked > 0 ? Math.round((yearPresent / yearTotalMarked) * 100) : 0;
+    return {
+      yearTotalMarked,
+      yearPresent,
+      yearAbsent,
+      yearPercent,
+    };
+  }, [summaryRecords, academicRange.start, academicRange.end]);
 
   const getMarkedBy = useCallback((record: Record<string, unknown> | undefined) => {
     if (!record) return undefined;
@@ -253,43 +416,126 @@ export default function StudentAttendanceScreen() {
     return typeof name === 'string' ? name : undefined;
   }, []);
 
+  const onBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/student/dashboard');
+  }, [router]);
+
   const onExport = useCallback(() => {
-    if (sortedDates.length === 0) return;
-    const escapeCsv = (v: string) => {
-      const s = String(v ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    };
-    const headers = ['Date', 'Day', 'Status', 'Marked By'];
-    const rows = sortedDates.map((dateStr) => {
-      const status = byDate[dateStr] ?? 'not_marked';
-      const record = byDateRecord[dateStr];
+    if (exportRecords.length === 0) {
+      Alert.alert('No data', 'No attendance records found for the previous 30 days.');
+      return;
+    }
+
+    const rowsByDate: Record<string, { status: StatusKey; markedBy: string }> = {};
+    for (const row of exportRecords as { attendance_date?: string; date?: string; status?: string }[]) {
+      const dateStr = String(row.attendance_date ?? row.date ?? '').slice(0, 10);
+      if (!dateStr) continue;
+      const status = getStatusKey(String(row.status ?? 'not_marked'));
+      rowsByDate[dateStr] = {
+        status,
+        markedBy: getMarkedBy(row as Record<string, unknown>) ?? '-',
+      };
+    }
+
+    const dateKeys = datesInRange(exportRange.start, exportRange.end).sort((a, b) => b.localeCompare(a));
+    const rows = dateKeys.map((dateStr) => {
+      const status = rowsByDate[dateStr]?.status ?? 'not_marked';
       const [y, m, d] = dateStr.split('-').map(Number);
       const dateObj = new Date(y, (m ?? 1) - 1, d ?? 1);
-      return [
-        dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        dateObj.toLocaleDateString(undefined, { weekday: 'long' }),
-        status === 'not_marked' ? 'Not Marked' : status.charAt(0).toUpperCase() + status.slice(1),
-        getMarkedBy(record) ?? '',
-      ].map(escapeCsv).join(',');
+      return {
+        date: dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        day: dateObj.toLocaleDateString(undefined, { weekday: 'long' }),
+        status: status === 'not_marked' ? 'Not Marked' : status.charAt(0).toUpperCase() + status.slice(1),
+        markedBy: rowsByDate[dateStr]?.markedBy ?? '-',
+      };
     });
-    const csv = [headers.join(','), ...rows].join('\n');
-    const filename = `attendance_${label.replace(/\s*–\s*/g, '_').replace(/,?\s+/g, '_')}.csv`;
+
+    const safeLabel = exportRange.label.replace(/[<>]/g, '');
+    const htmlRows = rows
+      .map(
+        (row) => `
+          <tr>
+            <td>${row.date}</td>
+            <td>${row.day}</td>
+            <td>${row.status}</td>
+            <td>${row.markedBy}</td>
+          </tr>
+        `
+      )
+      .join('');
+    const html = `
+      <html>
+        <head>
+          <title>Attendance Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #1f2937; }
+            h1 { margin: 0 0 8px; }
+            p { margin: 0 0 16px; color: #64748b; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h1>Attendance Report</h1>
+          <p>${safeLabel}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Status</th>
+                <th>Marked By</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${htmlRows}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        Alert.alert('Popup blocked', 'Please allow popups to download PDF.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      return;
     }
-  }, [sortedDates, byDate, byDateRecord, label, getMarkedBy]);
+
+    (async () => {
+      try {
+        const result = await Print.printToFileAsync({ html });
+        const canShare = await Sharing.isAvailableAsync();
+        if (!canShare) {
+          Alert.alert('Download unavailable', 'File sharing is not available on this device.');
+          return;
+        }
+        await Sharing.shareAsync(result.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save attendance report',
+          UTI: 'com.adobe.pdf',
+        });
+      } catch {
+        Alert.alert('Export failed', 'Could not generate attendance PDF. Please try again.');
+      }
+    })();
+  }, [exportRecords, exportRange, getMarkedBy]);
 
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+        <Pressable style={styles.backBtn} onPress={onBack} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={TEXT} />
         </Pressable>
         <Text style={styles.headerTitle}>Attendance</Text>
@@ -311,17 +557,14 @@ export default function StudentAttendanceScreen() {
         <View style={styles.heroCard}>
           <View style={styles.progressWrap}>
             <View style={styles.progressRing}>
-              <Text style={styles.progressValue}>{percent}%</Text>
+              <Text style={styles.progressValue}>{yearPercent}%</Text>
             </View>
             <Text style={styles.progressLabel}>ATTENDANCE</Text>
           </View>
           <View style={styles.statsGrid}>
-            <StatCard label="Total Days" value={totalDays} />
-            <StatCard label="Present" value={present} />
-            <StatCard label="Absent" value={absent} />
-            <StatCard label="Late" value={late} />
-            <StatCard label="Not Marked" value={notMarked} />
-            <StatCard label="Attendance %" value={`${percent}%`} />
+            <StatCard label="Total Marked" value={yearTotalMarked} />
+            <StatCard label="Present" value={yearPresent} />
+            <StatCard label="Absent" value={yearAbsent} />
           </View>
         </View>
 
@@ -341,24 +584,24 @@ export default function StudentAttendanceScreen() {
             <Ionicons name="chevron-forward" size={24} color={windowIndex === 0 ? MUTED : TEXT} />
           </Pressable>
         </View>
-        <Text style={styles.rangeHint}>Use the arrows to jump by 30 days.</Text>
+        <Text style={styles.rangeHint}>Use the arrows to jump by 15 days.</Text>
         <View style={styles.rangeBtns}>
           <Pressable style={styles.rangeBtn} onPress={() => setWindowIndex((i) => i + 1)}>
-            <Text style={styles.rangeBtnText}>Back 30 days</Text>
+            <Text style={styles.rangeBtnText}>Back 15 days</Text>
           </Pressable>
           <Pressable
             style={[styles.rangeBtn, windowIndex === 0 && styles.rangeBtnDisabled]}
             onPress={() => windowIndex > 0 && setWindowIndex((i) => i - 1)}
           >
             <Text style={[styles.rangeBtnText, windowIndex === 0 && styles.rangeBtnTextDisabled]}>
-              Next 30 days
+              Next 15 days
             </Text>
           </Pressable>
         </View>
 
         {/* Attendance log section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Attendance (Last 30 Days)</Text>
+          <Text style={styles.sectionTitle}>Attendance (Last 15 Days)</Text>
           {sortedDates.length > 0 ? (
             <Pressable onPress={onExport}>
               <Text style={styles.exportText}>Export</Text>
@@ -415,7 +658,7 @@ export default function StudentAttendanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG_START },
+  root: { flex: 1, backgroundColor: BG_START, marginTop: 15 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,19 +723,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: S.md,
+    rowGap: S.sm,
   },
   statCard: {
-    width: '48%',
+    width: '31%',
     minWidth: 0,
     backgroundColor: BG_START,
     borderRadius: RADIUS_SM,
-    padding: S.lg,
+    paddingVertical: S.md,
+    paddingHorizontal: S.sm,
     borderWidth: 1,
     borderColor: BORDER,
+    alignItems: 'center',
   },
-  statValue: { fontSize: 22, fontWeight: '800', color: TEXT },
-  statLabel: { fontSize: 12, color: MUTED, marginTop: 4 },
+  statValue: { fontSize: 18, fontWeight: '800', color: TEXT },
+  statLabel: { fontSize: 11, color: MUTED, marginTop: 4, textAlign: 'center' },
 
   rangeCard: {
     flexDirection: 'row',

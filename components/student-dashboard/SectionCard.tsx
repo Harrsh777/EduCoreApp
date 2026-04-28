@@ -5,7 +5,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewProps } from 'react-native';
 import { studentDashboardTheme, studentDashboardCardStyle } from '@/theme/studentDashboard';
-import { textStyles } from '@/theme/typography';
 
 const { colors, cardPadding, spacing: s } = studentDashboardTheme;
 
@@ -17,19 +16,30 @@ type SectionCardProps = ViewProps & {
 
 export function SectionCard({ title, children, gridColumns, style, ...rest }: SectionCardProps) {
   const childArray = React.Children.toArray(children);
-  const gridStyle = gridColumns === 3 ? styles.grid3 : styles.grid;
+  const _gridColumns = gridColumns; // retained for backward-compatible prop API
+  const splitIndex = Math.ceil(childArray.length / 2);
+  const leftColumn = childArray.slice(0, splitIndex);
+  const rightColumn = childArray.slice(splitIndex);
+
   return (
     <View style={[styles.wrap, style]} {...rest}>
       <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
-        <View style={gridStyle}>
-          {gridColumns === 3
-            ? childArray.map((child, i) => (
-                <View key={i} style={styles.grid3Item}>
-                  {child}
-                </View>
-              ))
-            : children}
+        <View style={styles.columns}>
+          <View style={styles.column}>
+            {leftColumn.map((child, i) => (
+              <View key={`left-${i}`} style={styles.item}>
+                {child}
+              </View>
+            ))}
+          </View>
+          <View style={styles.column}>
+            {rightColumn.map((child, i) => (
+              <View key={`right-${i}`} style={styles.item}>
+              {child}
+              </View>
+            ))}
+          </View>
         </View>
       </View>
     </View>
@@ -44,23 +54,24 @@ const styles = StyleSheet.create({
     padding: cardPadding,
   },
   title: {
-    ...textStyles.h4,
-    fontWeight: '700',
-    color: colors.primaryBright,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
     marginBottom: s.lg,
   },
-  grid: {
+  columns: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: s.lg,
-  },
-  grid3: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: s.md,
   },
-  grid3Item: {
-    width: '31%',
-    minWidth: 90,
+  column: {
+    flex: 1,
+    gap: s.md,
+  },
+  item: {
+    width: '100%',
   },
 });

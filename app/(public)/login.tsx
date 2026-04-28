@@ -3,20 +3,30 @@ import { spacing } from '@/theme/spacing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 const COLORS = {
   gradTop: '#F8FAFC',
   gradBottom: '#EEF2FF',
   surface: '#FFFFFF',
   primary: '#4F46E5',
-  border: 'rgba(148, 163, 184, 0.35)',
+  secondary: '#7C3AED',
+  accent: '#06B6D4',
+  border: 'rgba(148, 163, 184, 0.25)',
   header: '#0F172A',
   muted: '#64748B',
+  shadow: 'rgba(0,0,0,0.08)',
 } as const;
 
-const CARD_GAP = spacing[5];
 const SCREEN_PAD_X = spacing[6];
 
 type PortalDef = {
@@ -45,58 +55,91 @@ const PORTALS: readonly PortalDef[] = [
 ];
 
 export default function LoginHubScreen() {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  const innerRowWidth = windowWidth - SCREEN_PAD_X * 2;
-  const cardWidth = (innerRowWidth - CARD_GAP) / 2;
-  const cardHeight = cardWidth;
+  const cardWidth = (width - SCREEN_PAD_X * 2 - spacing[4]) / 2;
+  const cardHeight = cardWidth * 0.85; // 👈 reduced height
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.gradient} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}>
+      <LinearGradient
+        colors={[COLORS.gradTop, COLORS.gradBottom]}
+        style={styles.gradient}
+      >
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-          <View style={styles.screen}>
+          <View style={styles.container}>
+
+            {/* HEADER */}
             <View style={styles.header}>
-              <Text style={styles.welcome}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Please select your portal</Text>
-            </View>
+              
+              {/* Gradient Badge */}
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.secondary, COLORS.accent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.headerBadge}
+              >
+                <Text style={styles.welcome}>Welcome Back</Text>
+              </LinearGradient>
 
-            <View style={styles.centerBand}>
-              <View style={styles.portalRow}>
-                {PORTALS.map((p) => (
-                  <PortalCard
-                    key={p.label}
-                    label={p.label}
-                    title={p.title}
-                    icon={p.icon}
-                    iconTint={p.iconTint}
-                    href={p.href}
-                    width={cardWidth}
-                    height={cardHeight}
-                    borderColor={COLORS.border}
-                    surfaceColor={COLORS.surface}
-                    labelColor={COLORS.muted}
-                    titleColor={COLORS.header}
-                    iconCircleAlpha="14"
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={[styles.footer, { paddingBottom: Math.max(spacing[6], insets.bottom + spacing[4]) }]}>
-              <Text style={styles.footerText}>
-                Need assistance?{' '}
-                <Text
-                  accessibilityRole="link"
-                  accessibilityLabel="Contact support"
-                  onPress={() => {}}
-                  style={styles.supportLink}
-                >
-                  Contact Support
-                </Text>
+              <Text style={styles.subtitle}>
+                Choose how you want to continue
               </Text>
             </View>
+
+            {/* PORTAL SECTION */}
+            <View style={styles.portalSection}>
+              {PORTALS.map((p) => (
+                <View
+                  key={p.label}
+                  style={[
+                    styles.cardWrapper,
+                    {
+                      width: cardWidth,
+                      height: cardHeight,
+                    },
+                  ]}
+                >
+                  {/* Centering Layer */}
+                  <View style={styles.cardInner}>
+                    <PortalCard
+                      label={p.label}
+                      title={p.title}
+                      icon={p.icon}
+                      iconTint={p.iconTint}
+                      href={p.href}
+                      width={cardWidth}
+                      height={cardHeight}
+                      borderColor="transparent"
+                      surfaceColor="transparent"
+                      labelColor={COLORS.muted}
+                      titleColor={COLORS.header}
+                      iconCircleAlpha="18"
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* FOOTER */}
+            <View
+              style={[
+                styles.footer,
+                {
+                  paddingBottom: Math.max(
+                    spacing[6],
+                    insets.bottom + spacing[4]
+                  ),
+                },
+              ]}
+            >
+              <Text style={styles.footerText}>
+                Need help?{' '}
+                <Text style={styles.supportLink}>Contact Support</Text>
+              </Text>
+            </View>
+
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -108,62 +151,84 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+
   gradient: {
     flex: 1,
   },
+
   safe: {
     flex: 1,
   },
-  screen: {
+
+  container: {
     flex: 1,
     paddingHorizontal: SCREEN_PAD_X,
+    justifyContent: 'space-between',
   },
+
+  /* HEADER */
   header: {
-    paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    marginTop: -15, // 👈 exact as requested
   },
+
+  headerBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: 16,
+  },
+
   welcome: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: '800',
-    color: COLORS.header,
-    letterSpacing: -0.8,
-    lineHeight: 40,
+    color: '#fff',
   },
+
   subtitle: {
-    marginTop: spacing[1.5],
+    marginTop: spacing[2],
     fontSize: 15,
-    fontWeight: '500',
     color: COLORS.muted,
-    letterSpacing: -0.1,
-    lineHeight: 22,
+    fontWeight: '500',
   },
-  centerBand: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  portalRow: {
+
+  /* PORTALS */
+  portalSection: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    maxWidth: '100%',
-    gap: CARD_GAP,
+    justifyContent: 'space-between',
+    marginTop: spacing[6],
   },
+
+  cardWrapper: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+
+  cardInner: {
+    flex: 1,
+    justifyContent: 'center',  // 👈 vertical center
+    alignItems: 'center',      // 👈 horizontal center
+  },
+
+  /* FOOTER */
   footer: {
-    paddingTop: spacing[4],
     alignItems: 'center',
   },
+
   footerText: {
     fontSize: 14,
     color: COLORS.muted,
-    textAlign: 'center',
-    lineHeight: 20,
   },
+
   supportLink: {
-    fontSize: 14,
-    fontWeight: '700',
     color: COLORS.primary,
-    lineHeight: 20,
+    fontWeight: '700',
   },
 });

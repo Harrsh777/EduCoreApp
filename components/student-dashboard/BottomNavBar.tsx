@@ -33,7 +33,7 @@ const TABS: TabItem[] = [
   },
   {
     key: 'calendar',
-    label: 'Calendar',
+    label: 'My Class',
     icon: 'calendar-outline',
     iconFilled: 'calendar',
     active: '#DB2777',
@@ -42,9 +42,9 @@ const TABS: TabItem[] = [
   },
   {
     key: 'messages',
-    label: 'Messages',
-    icon: 'chatbubble-outline',
-    iconFilled: 'chatbubbles',
+    label: 'Attendance',
+    icon: 'checkbox-outline',
+    iconFilled: 'checkbox',
     active: '#0891B2',
     idle: '#67E8F9',
     bubble: 'rgba(8, 145, 178, 0.14)',

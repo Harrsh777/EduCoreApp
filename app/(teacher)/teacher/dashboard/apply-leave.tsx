@@ -44,6 +44,7 @@ export default function TeacherApplyLeaveScreen() {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
+  const [attachmentNote, setAttachmentNote] = useState('');
 
   const { data: typesData, isLoading: typesLoading, error: typesError } = useQuery({
     queryKey: ['leave', 'types', schoolCode],
@@ -93,6 +94,16 @@ export default function TeacherApplyLeaveScreen() {
     }
     submitMutation.mutate();
   }, [leaveTypeId, startDate, endDate, reason, submitMutation, showToast]);
+
+  const setQuickRange = useCallback((offsetStart: number, offsetEnd: number) => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() + offsetStart);
+    const end = new Date(now);
+    end.setDate(now.getDate() + offsetEnd);
+    setStartDate(start.toISOString().slice(0, 10));
+    setEndDate(end.toISOString().slice(0, 10));
+  }, []);
 
   if (typesError) {
     return (
@@ -148,6 +159,17 @@ export default function TeacherApplyLeaveScreen() {
               <Text style={styles.dayValue}>{days}</Text>
             </View>
           )}
+          <View style={styles.quickDateRow}>
+            <Pressable style={styles.quickDateChip} onPress={() => setQuickRange(0, 0)}>
+              <Text style={styles.quickDateText}>Today</Text>
+            </Pressable>
+            <Pressable style={styles.quickDateChip} onPress={() => setQuickRange(1, 1)}>
+              <Text style={styles.quickDateText}>Tomorrow</Text>
+            </Pressable>
+            <Pressable style={styles.quickDateChip} onPress={() => setQuickRange(0, 2)}>
+              <Text style={styles.quickDateText}>3 Days</Text>
+            </Pressable>
+          </View>
         </Card>
 
         <Card style={styles.card}>
@@ -170,6 +192,14 @@ export default function TeacherApplyLeaveScreen() {
             placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={2}
+          />
+          <Text style={styles.label}>Attachment note (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={attachmentNote}
+            onChangeText={setAttachmentNote}
+            placeholder="Mention proof details (upload support depends on backend)"
+            placeholderTextColor={colors.textMuted}
           />
         </Card>
 
@@ -216,6 +246,9 @@ const styles = StyleSheet.create({
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: s.sm },
   dayLabel: { fontSize: 14, color: colors.textMuted },
   dayValue: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  quickDateRow: { flexDirection: 'row', gap: s.sm, marginTop: s.sm, flexWrap: 'wrap' },
+  quickDateChip: { paddingHorizontal: s.md, paddingVertical: s.xs, borderRadius: 9999, backgroundColor: colors.primaryLight },
+  quickDateText: { fontSize: 12, color: colors.primaryDark, fontWeight: '600' },
   errorText: { ...textStyles.body, color: colors.danger, padding: s.lg },
   bottomPad: { height: 40 },
 });

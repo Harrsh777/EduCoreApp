@@ -29,6 +29,8 @@ type FloatingLabelInputProps = TextInputProps & {
   themeOverrides?: InputThemeOverrides;
   /** Shown inside the field on the right (e.g. password visibility toggle) */
   rightAccessory?: ReactNode;
+  /** Render label as placeholder only (no floating top label) */
+  hideFloatingLabel?: boolean;
 };
 
 export function FloatingLabelInput({
@@ -40,11 +42,12 @@ export function FloatingLabelInput({
   style,
   themeOverrides,
   rightAccessory,
+  hideFloatingLabel = false,
   ...rest
 }: FloatingLabelInputProps) {
   const [focused, setFocused] = useState(false);
   const hasValue = Boolean(value && String(value).trim());
-  const floating = focused || hasValue;
+  const floating = !hideFloatingLabel && (focused || hasValue);
   const o = themeOverrides;
   const labelColor = o?.labelColor ?? colors.text.tertiary;
   const inputColor = o?.inputColor ?? colors.text.primary;
@@ -63,20 +66,22 @@ export function FloatingLabelInput({
           error && styles.inputWrapError,
         ]}
       >
-  <Text
-  style={[
-    styles.label,
-    {
-      color: floating ? focusColor : labelColor,
-      opacity: 1, // 👈 ensure no fading
-    },
-    fontFamily && { fontFamily },
-    floating && styles.labelFloating,
-    error && styles.labelError,
-  ]}
->
-          {label}
-        </Text>
+        {!hideFloatingLabel ? (
+          <Text
+            style={[
+              styles.label,
+              {
+                color: floating ? focusColor : labelColor,
+                opacity: floating ? 1 : 0,
+              },
+              fontFamily && { fontFamily },
+              floating && styles.labelFloating,
+              error && styles.labelError,
+            ]}
+          >
+            {label}
+          </Text>
+        ) : null}
         <View style={styles.inputRow}>
           <TextInput
             style={[
@@ -95,8 +100,8 @@ export function FloatingLabelInput({
               setFocused(false);
               onBlur?.(e);
             }}
-          placeholder=" "
-placeholderTextColor="transparent"
+            placeholder={floating ? ' ' : label}
+            placeholderTextColor={placeholderColor}
             {...rest}
           />
           {rightAccessory ? <View style={styles.accessory}>{rightAccessory}</View> : null}
@@ -121,8 +126,12 @@ const styles = StyleSheet.create({
   inputWrapError: { borderColor: colors.error.main },
   label: {
     position: 'absolute',
+    top: LABEL_TOP,
     left: spacing[4],
     ...textStyles.body,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
   },
   labelFloating: {
     top: LABEL_FOCUSED_TOP,
@@ -139,6 +148,9 @@ const styles = StyleSheet.create({
     ...textStyles.body,
     fontSize: fontSize.lg,
     color: colors.text.primary,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
     paddingVertical: 0,
     minHeight: 24,
     flex: 1,

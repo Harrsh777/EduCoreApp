@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Linking } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTeacher } from '@/lib/teacher-context';
 import { teacherService } from '@/services/teacher.service';
@@ -50,17 +50,29 @@ export default function TeacherCertificatesScreen() {
     queryFn: () => certificateService.getCertificatesSimple(schoolCode).then((r) => (r as { data?: { types?: { id: string; name?: string }[] }; data?: unknown[] })?.data),
     enabled: Boolean(schoolCode),
   });
+  const { data: issuedData, isLoading: issuedLoading } = useQuery({
+    queryKey: ['certificates', 'simple', 'issued', schoolCode, studentId],
+    queryFn: () =>
+      certificateService
+        .getCertificatesSimple(schoolCode, studentId ? { student_id: studentId } : undefined)
+        .then((r) => (r as { data?: { list?: unknown[] } | unknown[] })?.data),
+    enabled: Boolean(schoolCode),
+  });
 
   const classesList = (Array.isArray(classesData) ? classesData : []) as { id?: string; class_name?: string; name?: string; section?: string }[];
   const studentsList = (Array.isArray(studentsData) ? studentsData : []) as { id?: string; name?: string; admission_no?: string }[];
   const typesRaw = certTypesData as { types?: { id: string; name?: string }[] } | undefined;
   const certTypes = typesRaw?.types ?? (Array.isArray(certTypesData) ? certTypesData : []) as { id: string; name?: string }[];
+  const issuedList = (
+    (Array.isArray(issuedData) ? issuedData : (issuedData as { list?: unknown[] } | undefined)?.list) ?? []
+  ) as { id?: string; certificate_type?: string; type?: string; issued_at?: string; file_url?: string; url?: string }[];
 
   const uploadMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       certificateService.uploadCertificateSimple(schoolCode, { school_code: schoolCode, ...body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certificates', schoolCode] });
+      queryClient.invalidateQueries({ queryKey: ['certificates', 'simple', 'issued', schoolCode, studentId] });
       showToast('Certificate uploaded', 'success');
     },
     onError: (err: Error) => showToast(err?.message ?? 'Upload failed', 'error'),
@@ -125,7 +137,39 @@ export default function TeacherCertificatesScreen() {
         </Card>
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Issued certificates</Text>
-          <Text style={styles.empty}>List loads from GET /api/certificates/simple with filters.</Text>
+          {issuedLoading ? (
+            <Text style={styles.empty}>Loading issued certificates...</Text>
+          ) : issuedList.length === 0 ? (
+            <Text style={styles.empty}>No issued certificates yet.</Text>
+          ) : (
+            issuedList.map((item) => {
+              const openUrl = item.file_url ?? item.url ?? '';
+              return (
+                <View key={item.id ?? `${item.type}-${item.issued_at}`} style={styles.issuedItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.issuedType}>{item.certificate_type ?? item.type ?? 'Certificate'}</Text>
+                    <Text style={styles.issuedMeta}>{item.issued_at ? new Date(item.issued_at).toLocaleString() : 'Date unavailable'}</Text>
+                  </View>
+                  <PrimaryButton
+                    title="Open"
+                    variant="outline"
+                    onPress={async () => {
+                      if (!openUrl) {
+                        showToast('No file URL available', 'error');
+                        return;
+                      }
+                      const supported = await Linking.canOpenURL(openUrl);
+                      if (!supported) {
+                        showToast('Cannot open certificate URL', 'error');
+                        return;
+                      }
+                      await Linking.openURL(openUrl);
+                    }}
+                  />
+                </View>
+              );
+            })
+          )}
         </Card>
         <View style={styles.bottomPad} />
       </ScreenWrapper>
@@ -147,5 +191,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: s.md, fontSize: 14, color: colors.textPrimary, marginTop: s.xs },
   actions: { flexDirection: 'row', gap: s.md, marginTop: s.lg },
   empty: { ...textStyles.caption, color: colors.textMuted },
+  issuedItem: { flexDirection: 'row', alignItems: 'center', gap: s.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: s.md, marginTop: s.md },
+  issuedType: { ...textStyles.body, color: colors.textPrimary, fontWeight: '600' },
+  issuedMeta: { ...textStyles.caption, color: colors.textMuted, marginTop: 2 },
   bottomPad: { height: 40 },
 });

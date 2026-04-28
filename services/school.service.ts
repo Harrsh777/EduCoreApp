@@ -106,14 +106,47 @@ export function getAttendanceClass(school_code: string, params: { class_id: stri
   return api.get('/api/attendance/class', { params: withSchool(params, school_code) });
 }
 
-/** POST /api/attendance/update */
+/** Attendance write endpoint varies by deployment (PUT update vs POST mark/update). */
 export function updateAttendance(body: {
   school_code: string;
   class_id: string;
   date: string;
   attendance: Array<{ student_id: string; status: string }>;
 }) {
-  return api.post('/api/attendance/update', body);
+  const normalizedBody = {
+    ...body,
+    attendance: (body.attendance ?? []).map((row) => ({
+      ...row,
+      status: row.status === 'half_day' ? 'absent' : row.status,
+    })),
+  };
+
+  return api.put('/api/attendance/update', normalizedBody).catch((error: unknown) => {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 404 || status === 405) {
+      return api.post('/api/attendance/mark', normalizedBody).catch((markError: unknown) => {
+        const markStatus = (markError as { response?: { status?: number } })?.response?.status;
+        if (markStatus === 400 && normalizedBody.attendance.length > 0) {
+          return Promise.all(
+            normalizedBody.attendance.map((row) =>
+              api.post('/api/attendance/mark', {
+                school_code: normalizedBody.school_code,
+                class_id: normalizedBody.class_id,
+                date: normalizedBody.date,
+                student_id: row.student_id,
+                status: row.status,
+              })
+            )
+          );
+        }
+        if (markStatus === 404 || markStatus === 405) {
+          return api.post('/api/attendance/update', normalizedBody);
+        }
+        throw markError;
+      });
+    }
+    throw error;
+  });
 }
 
 /** GET /api/calendar/academic */

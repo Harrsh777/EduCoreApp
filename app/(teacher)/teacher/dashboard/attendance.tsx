@@ -48,11 +48,20 @@ const G = {
   lateBg:       '#EFF6FF',
 };
 
-type AttendanceStatus = 'present' | 'absent' | 'late';
+type AttendanceStatus = 'present' | 'absent' | 'half_day';
 
 type StudentRow = { id: string; student_id?: string; name?: string; admission_no?: string; photo_url?: string; [k: string]: unknown };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function normalizeAttendanceStatus(value: unknown): AttendanceStatus {
+  if (typeof value !== 'string') return 'present';
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, '_');
+  if (normalized === 'present' || normalized === 'absent' || normalized === 'half_day') {
+    return normalized;
+  }
+  return 'present';
+}
+
 /** Unwrap class attendance API: roster may be empty until GET /api/students is merged in. */
 function normalizeAttendanceStudents(raw: unknown): StudentRow[] {
   if (!raw || typeof raw !== 'object') return [];
@@ -111,19 +120,38 @@ function mergeRosterAndAttendance(roster: StudentRow[], fromAttendance: StudentR
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function toLocalYmd(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseYmd(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map((v) => Number(v));
+  if (!y || !m || !d) return new Date();
+  return new Date(y, m - 1, d);
+}
+
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalYmd(new Date());
 }
 
 function formatDisplayDate(dateStr: string) {
   try {
-    const d = new Date(dateStr + 'T00:00:00');
+    const d = parseYmd(dateStr);
     const isToday = dateStr === todayStr();
     const base = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return isToday ? `Today, ${base}` : base;
   } catch {
     return dateStr;
   }
+}
+
+function shiftDate(dateStr: string, days: number) {
+  const d = parseYmd(dateStr);
+  d.setDate(d.getDate() + days);
+  return toLocalYmd(d);
 }
 
 function getInitials(name?: string) {
@@ -165,10 +193,11 @@ function StudentCard({
   const statusConfig: Record<AttendanceStatus, { label: string; icon: string; bg: string; text: string; dot: string }> = {
     present: { label: 'Present', icon: '✓', bg: G.green,    text: '#fff',     dot: G.green },
     absent:  { label: 'Absent',  icon: '✕', bg: G.red,      text: '#fff',     dot: G.red   },
-    late:    { label: 'Late',    icon: '🕐', bg: G.late,     text: '#fff',     dot: G.late  },
+    half_day:{ label: 'Half-day', icon: '◐', bg: G.late,     text: '#fff',     dot: G.late  },
   };
 
-  const dotColor = statusConfig[status].dot;
+  const currentStatus = normalizeAttendanceStatus(status);
+  const dotColor = statusConfig[currentStatus].dot;
 
   return (
     <View style={styles.studentCard}>
@@ -193,9 +222,9 @@ function StudentCard({
 
       {/* Toggle row */}
       <View style={styles.toggleRow}>
-        {(['present', 'absent', 'late'] as AttendanceStatus[]).map((s) => {
+        {(['present', 'absent', 'half_day'] as AttendanceStatus[]).map((s) => {
           const cfg = statusConfig[s];
-          const active = status === s;
+          const active = currentStatus === s;
           return (
             <Pressable
               key={s}
@@ -274,6 +303,7 @@ export default function TeacherMarkAttendanceScreen() {
     () => classesList.find((c) => String(c.id) === String(classId)),
     [classesList, classId]
   );
+  const canMoveToNextDay = date < todayStr();
 
   // ── Existing marks + names (may be empty before any attendance exists) ──
   const { data: attendanceData, isLoading: loadingAttendance } = useQuery({
@@ -351,8 +381,8 @@ export default function TeacherMarkAttendanceScreen() {
         const sid = s.id ?? s.student_id ?? '';
         if (!next[sid]) {
           // Use server-provided status if available, else default present
-          const serverStatus = (s as { status?: string }).status as AttendanceStatus | undefined;
-          next[sid] = serverStatus ?? 'present';
+          const serverStatus = (s as { status?: unknown }).status;
+          next[sid] = normalizeAttendanceStatus(serverStatus);
         }
       });
       return next;
@@ -409,6 +439,10 @@ export default function TeacherMarkAttendanceScreen() {
       .filter((x) => x.student_id);
     mutation.mutate({ school_code: schoolCode, class_id: classId, date, attendance: list });
   }, [schoolCode, classId, date, students, attendance, mutation, showToast]);
+
+  const goToPrevDay = () => setDate((d) => shiftDate(d, -1));
+  const goToNextDay = () => setDate((d) => shiftDate(d, 1));
+  const goToToday = () => setDate(todayStr());
 
   // ─────────────────────────────────────────────────────────────────────────────
   if (!loadingClasses && !hasAssignedClasses) {
@@ -482,11 +516,23 @@ export default function TeacherMarkAttendanceScreen() {
 
         {/* ── Date Row ── */}
         <View style={styles.dateRow}>
-          <Pressable style={styles.datePill}>
-            <Text style={styles.dateIcon}>📅</Text>
-            <Text style={styles.dateText}>{formatDisplayDate(date)}</Text>
-            <Text style={styles.dateChevron}>▾</Text>
-          </Pressable>
+          <View style={styles.dateControls}>
+            <Pressable style={styles.dateArrowBtn} onPress={goToPrevDay}>
+              <Text style={styles.dateArrowText}>‹</Text>
+            </Pressable>
+            <Pressable style={styles.datePill} onPress={goToToday}>
+              <Text style={styles.dateIcon}>📅</Text>
+              <Text style={styles.dateText}>{formatDisplayDate(date)}</Text>
+              {date !== todayStr() ? <Text style={styles.dateTodayTag}>Today</Text> : null}
+            </Pressable>
+            <Pressable
+              style={[styles.dateArrowBtn, !canMoveToNextDay && styles.dateArrowBtnDisabled]}
+              onPress={goToNextDay}
+              disabled={!canMoveToNextDay}
+            >
+              <Text style={[styles.dateArrowText, !canMoveToNextDay && styles.dateArrowTextDisabled]}>›</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.markedStatus}>
             <View
@@ -716,10 +762,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: G.slateBorder,
   },
+  dateControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   datePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingVertical: 8,
+  },
+  dateArrowBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: G.slateBorder,
+    backgroundColor: G.slateLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateArrowBtnDisabled: {
+    opacity: 0.55,
+  },
+  dateArrowText: {
+    fontSize: 20,
+    color: G.textMid,
+    lineHeight: 20,
+  },
+  dateArrowTextDisabled: {
+    color: G.textLight,
   },
   dateIcon: {
     fontSize: 16,
@@ -729,10 +802,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: G.textDark,
   },
-  dateChevron: {
+  dateTodayTag: {
     fontSize: 11,
-    color: G.textLight,
-    marginLeft: 2,
+    fontWeight: '700',
+    color: G.greenDark,
+    backgroundColor: G.greenLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   markedStatus: {
     flexDirection: 'row',

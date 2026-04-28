@@ -33,6 +33,14 @@ export default function StudentChangePasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(student)/student/dashboard/settings');
+  }, [router]);
+
   const mutation = useMutation({
     mutationFn: () =>
       passwordService.changeStudentPassword({
@@ -43,7 +51,7 @@ export default function StudentChangePasswordScreen() {
       }),
     onSuccess: () => {
       showToast('Password changed', 'success');
-      router.back();
+      handleBack();
     },
     onError: (err: Error & { response?: { data?: { message?: string } } }) => {
       showToast(err?.response?.data?.message ?? err?.message ?? 'Failed', 'error');
@@ -51,8 +59,24 @@ export default function StudentChangePasswordScreen() {
   });
 
   const handleSubmit = useCallback(() => {
-    if (!currentPassword.trim() || !newPassword.trim()) {
-      showToast('Fill current and new password', 'error');
+    if (!schoolCode || !studentId) {
+      showToast('Student session missing. Please login again.', 'error');
+      return;
+    }
+    if (!currentPassword.trim()) {
+      showToast('Enter current password', 'error');
+      return;
+    }
+    if (!newPassword.trim()) {
+      showToast('Enter new password', 'error');
+      return;
+    }
+    if (newPassword.length < 8) {
+      showToast('New password must be at least 8 characters', 'error');
+      return;
+    }
+    if (!confirmPassword.trim()) {
+      showToast('Confirm your new password', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -60,17 +84,17 @@ export default function StudentChangePasswordScreen() {
       return;
     }
     mutation.mutate();
-  }, [currentPassword, newPassword, confirmPassword, mutation, showToast]);
+  }, [schoolCode, studentId, currentPassword, newPassword, confirmPassword, mutation, showToast]);
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={handleBack}>
           <Text style={[styles.backText, { color: STUDENT_BLUE }]}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>Change Password</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.pageTitle}>Change Password</Text>
         <Text style={styles.label}>Current password</Text>
         <TextInput
           style={styles.input}
@@ -125,9 +149,17 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: spacing[2], marginRight: spacing[2], minHeight: 44, justifyContent: 'center' },
   backText: { fontSize: 16, fontWeight: '600' },
-  title: { ...textStyles.h4, color: '#111827', flex: 1 },
   scroll: { flex: 1 },
   content: { padding: spacing[4], paddingBottom: spacing[8] },
+  pageTitle: {
+    ...textStyles.h4,
+    color: '#111827',
+    marginTop: 15,
+    marginBottom: spacing[1],
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   label: { ...textStyles.bodySm, color: '#6B7280', marginTop: spacing[4], marginBottom: spacing[1] },
   input: {
     borderWidth: 1,

@@ -18,7 +18,7 @@ import { studentService } from '@/services/student.service';
 import { timetableService } from '@/services/timetable.service';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -73,6 +73,7 @@ function normalizeDay(day: string | undefined): string | undefined {
 
 export default function StudentMyClassScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { student, schoolCode } = useStudent();
   const studentId = student?.id ?? '';
   const clsFromProfile = toStr(student?.class) || String(student?.class ?? '');
@@ -317,16 +318,22 @@ export default function StudentMyClassScreen() {
     return keys.sort((a, b) => (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0));
   }, [timetableMatrix]);
 
+  const onBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    router.replace('/student/dashboard');
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+        <Pressable style={styles.backBtn} onPress={onBack} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={TEXT} />
         </Pressable>
         <Text style={styles.headerTitle}>My Class</Text>
-        <Pressable style={styles.menuBtn} hitSlop={12}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={TEXT} />
-        </Pressable>
+        <View style={styles.headerRightSpace} />
       </View>
 
       <ScrollView
@@ -583,6 +590,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 15,
     paddingHorizontal: S.lg,
     paddingVertical: S.lg,
     backgroundColor: CARD_BG,
@@ -592,7 +600,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: S.sm, marginRight: S.sm },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: TEXT, textAlign: 'center' },
-  menuBtn: { padding: S.sm },
+  headerRightSpace: { width: 40 },
   scroll: { flex: 1 },
   scrollContent: { padding: S.lg, paddingBottom: S.xxxl },
 
@@ -600,16 +608,17 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: RADIUS,
     padding: S.xxl,
+    marginTop: 10,
     marginBottom: S.xxl,
     borderWidth: 1,
     borderColor: BORDER,
   },
   cardHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: S.lg },
   cardHeading: { fontSize: 18, fontWeight: '700', color: TEXT },
-  detailsGrid: { gap: S.lg },
-  detailItem: {},
-  detailLabel: { fontSize: 12, color: MUTED, marginBottom: 4 },
-  detailValue: { fontSize: 18, fontWeight: '700', color: TEXT },
+  detailsGrid: { flexDirection: 'row', alignItems: 'center', gap: S.md },
+  detailItem: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  detailLabel: { fontSize: 12, color: MUTED, marginRight: 4, flexShrink: 1 },
+  detailValue: { fontSize: 15, fontWeight: '700', color: TEXT, flexShrink: 1 },
 
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: S.sm },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: TEXT },

@@ -21,7 +21,6 @@ import { env } from '@/lib/env';
 import { getStudentByAdmissionNo } from '@/services/school.service';
 import { studentService } from '@/services/student.service';
 import { studentDashboardTheme } from '@/theme/studentDashboard';
-import { textStyles } from '@/theme/typography';
 
 const { colors, spacing: s, cardRadius, webSolid } = studentDashboardTheme;
 
@@ -216,10 +215,18 @@ export default function StudentTransportScreen() {
     (vehicle.type !== '—' ? vehicle.type : '') ||
     '—';
 
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/student/dashboard');
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+        <Pressable style={styles.backBtn} onPress={handleBackPress} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text style={styles.title}>Transport</Text>
@@ -329,6 +336,7 @@ export default function StudentTransportScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    marginTop: 15,
     backgroundColor: colors.backgroundStart,
   },
   header: {
@@ -343,7 +351,15 @@ const styles = StyleSheet.create({
     gap: s.sm,
   },
   backBtn: { padding: s.sm, marginRight: s.xs },
-  title: { ...textStyles.h4, color: colors.textPrimary, flex: 1 },
+  title: {
+    color: colors.textPrimary,
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   statusPill: {
     backgroundColor: '#DCFCE7',
     paddingHorizontal: s.md,
@@ -369,8 +385,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: webSolid.borderCard,
   },
-  emptyTitle: { ...textStyles.h4, color: colors.textPrimary, marginTop: s.lg },
-  emptySubtitle: { ...textStyles.body, color: colors.textSecondary, marginTop: s.sm, textAlign: 'center' },
+  emptyTitle: {
+    color: colors.textPrimary,
+    marginTop: s.lg,
+    fontSize: 18,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  emptySubtitle: {
+    color: colors.textSecondary,
+    marginTop: s.sm,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '400',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
 
   sectionCard: {
     backgroundColor: colors.surface,
@@ -380,7 +413,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: webSolid.borderCard,
   },
-  sectionTitle: { ...textStyles.h4, color: colors.textPrimary, marginBottom: s.md },
+  sectionTitle: {
+    color: colors.textPrimary,
+    marginBottom: s.md,
+    fontSize: 17,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   kvRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -391,10 +432,42 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: webSolid.borderSubtle,
   },
-  kvLabel: { ...textStyles.caption, color: colors.textMuted, flex: 1 },
-  kvValue: { ...textStyles.body, color: colors.textPrimary, fontWeight: '600', flex: 1, textAlign: 'right' },
-  emphasisLine: { ...textStyles.body, color: colors.textPrimary, fontWeight: '600' },
-  mutedLine: { ...textStyles.body, color: colors.textSecondary, fontStyle: 'italic' },
+  kvLabel: {
+    color: colors.textMuted,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '400',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  kvValue: {
+    color: colors.textPrimary,
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  emphasisLine: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  mutedLine: {
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    fontSize: 15,
+    fontWeight: '400',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   stopsHeaderInline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -418,8 +491,25 @@ const styles = StyleSheet.create({
     borderBottomColor: webSolid.borderSubtle,
     gap: s.sm,
   },
-  stopBullet: { width: 28, ...textStyles.caption, color: colors.textMuted, fontWeight: '700' },
-  stopLine: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary, minWidth: 0 },
+  stopBullet: {
+    width: 28,
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+  stopLine: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    minWidth: 0,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
 
   bottomPad: { height: 80 },
 });

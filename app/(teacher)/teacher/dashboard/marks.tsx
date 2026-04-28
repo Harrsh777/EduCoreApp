@@ -15,7 +15,9 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTeacher } from '@/lib/teacher-context';
 import {
@@ -195,9 +197,13 @@ export default function TeacherMarksEntryScreen() {
   const showToast = useToastStore((s) => s.show);
   const queryClient = useQueryClient();
   const [examId, setExamId] = useState('');
+  const [selectedClassName, setSelectedClassName] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
-  const [marksMap, setMarksMap] = useState<Record<string, string>>({});
+  const [draftMarksBySubject, setDraftMarksBySubject] = useState<Record<string, Record<string, string>>>({});
+  const [absentBySubject, setAbsentBySubject] = useState<Record<string, Record<string, boolean>>>({});
+  const [auditNote, setAuditNote] = useState('');
 
   const { data: examsRaw, isLoading: loadingExams } = useQuery({
     queryKey: ['teacher', 'exams', schoolCode, teacher?.id, teacher?.staff_id, 'marks'],
@@ -234,6 +240,17 @@ export default function TeacherMarksEntryScreen() {
   });
 
   const examsList = useMemo(() => unwrapTeacherExamsPayload(examsRaw), [examsRaw]);
+  const { data: assignmentsRaw } = useQuery({
+    queryKey: ['teacher', 'teaching-assignments', schoolCode, teacher?.id],
+    queryFn: () =>
+      teacherService
+        .getTeachingAssignments({
+          school_code: schoolCode,
+          teacher_id: teacher?.id ?? '',
+        })
+        .then((r) => r.data),
+    enabled: Boolean(schoolCode && teacher?.id),
+  });
 
   const teacherClassesBase = useMemo(() => normalizeTeacherClassesFromApi(classesData), [classesData]);
   const schoolClassesList = useMemo(() => unwrapSchoolClassesPayload(schoolClassesPayload), [schoolClassesPayload]);
@@ -243,8 +260,53 @@ export default function TeacherMarksEntryScreen() {
   );
 
   useEffect(() => {
+    if (!examId && examsList.length > 0) {
+      setExamId(String(examsList[0].id));
+    }
+  }, [examsList, examId]);
+
+  useEffect(() => {
     if (!classId && classesList.length > 0) setClassId(String(classesList[0].id));
   }, [classesList, classId]);
+
+  const classChoices = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of classesList) {
+      const key = str((c as { class_name?: string }).class_name) || str((c as { class?: string }).class) || str(c.name);
+      if (key) names.add(key);
+    }
+    return Array.from(names);
+  }, [classesList]);
+
+  const sectionChoices = useMemo(() => {
+    if (!selectedClassName) return [];
+    const sections = new Set<string>();
+    for (const c of classesList) {
+      const className =
+        str((c as { class_name?: string }).class_name) || str((c as { class?: string }).class) || str(c.name);
+      if (className !== selectedClassName) continue;
+      const sec = str(c.section);
+      if (sec) sections.add(sec);
+    }
+    return Array.from(sections);
+  }, [classesList, selectedClassName]);
+
+  useEffect(() => {
+    if (!selectedClassName && classChoices.length > 0) setSelectedClassName(classChoices[0]);
+  }, [classChoices, selectedClassName]);
+
+  useEffect(() => {
+    if (!selectedSection && sectionChoices.length > 0) setSelectedSection(sectionChoices[0]);
+  }, [sectionChoices, selectedSection]);
+
+  useEffect(() => {
+    const match = classesList.find((c) => {
+      const className =
+        str((c as { class_name?: string }).class_name) || str((c as { class?: string }).class) || str(c.name);
+      return className === selectedClassName && str(c.section) === selectedSection;
+    });
+    if (match && String(match.id) !== String(classId)) setClassId(String(match.id));
+  }, [classesList, selectedClassName, selectedSection, classId]);
 
   const selectedClass = useMemo(
     () => classesList.find((c) => String(c.id) === String(classId)),
@@ -256,8 +318,39 @@ export default function TeacherMarksEntryScreen() {
     [examsList, examId]
   );
 
-  const examSubjects = useMemo(() => examSubjectsList(selectedExam), [selectedExam]);
+  const examSubjects = useMemo(() => {
+    const direct = examSubjectsList(selectedExam);
+    if (direct.length > 0) return direct;
+    const body = assignmentsRaw as { data?: { assignments?: unknown[] } } | undefined;
+    const assignments =
+      (Array.isArray(body?.data?.assignments) ? body?.data?.assignments : Array.isArray((body as { assignments?: unknown[] })?.assignments) ? (body as { assignments?: unknown[] }).assignments : []) ?? [];
+    const out: ExamSubject[] = [];
+    for (const raw of assignments) {
+      if (!raw || typeof raw !== 'object') continue;
+      const a = raw as Record<string, unknown>;
+      const id = str(a.subject_id ?? a.id);
+      const name = str(a.subject_name ?? a.subject ?? a.name);
+      if (!id) continue;
+      if (!out.some((x) => x.id === id)) out.push({ id, name: name || 'Subject' });
+    }
+    return out;
+  }, [selectedExam, assignmentsRaw]);
   const examIdApi = examIdForApi(selectedExam);
+  const subjectMetaMap = useMemo(() => {
+    const out: Record<string, { maxMarks: number }> = {};
+    if (selectedExam?.subjects && Array.isArray(selectedExam.subjects)) {
+      for (const raw of selectedExam.subjects) {
+        if (!raw || typeof raw !== 'object') continue;
+        const s = raw as Record<string, unknown>;
+        const sid = str(s.id ?? s.subject_id);
+        if (!sid) continue;
+        const maxRaw = Number(s.max_marks ?? s.maximum_marks ?? s.total_marks ?? s.marks_out_of ?? 100);
+        out[sid] = { maxMarks: Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : 100 };
+      }
+    }
+    return out;
+  }, [selectedExam]);
+  const selectedSubjectMaxMarks = subjectId ? (subjectMetaMap[subjectId]?.maxMarks ?? 100) : 100;
 
   useEffect(() => {
     const subs = examSubjectsList(selectedExam);
@@ -332,12 +425,42 @@ export default function TeacherMarksEntryScreen() {
   const existingMarksMap = Object.fromEntries(
     (existingMarks as MarkRow[]).map((m) => [m.student_id, m.marks ?? m.grade ?? ''])
   );
+  const currentMarksMap = draftMarksBySubject[subjectId] ?? {};
+  const currentAbsentMap = absentBySubject[subjectId] ?? {};
+
+  useEffect(() => {
+    if (!subjectId) return;
+    setDraftMarksBySubject((prev) => {
+      if (prev[subjectId]) return prev;
+      return { ...prev, [subjectId]: { ...existingMarksMap } };
+    });
+  }, [subjectId, existingMarksMap]);
+
+  const deriveGrade = useCallback((pct: number): string => {
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 70) return 'B+';
+    if (pct >= 60) return 'B';
+    if (pct >= 50) return 'C';
+    if (pct >= 40) return 'D';
+    return 'F';
+  }, []);
+
+  const enteredCount = useMemo(
+    () =>
+      studentsList.filter((s) => {
+        const val = String((currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '')).trim();
+        return val.length > 0 || Boolean(currentAbsentMap[s.id]);
+      }).length,
+    [studentsList, currentMarksMap, existingMarksMap, currentAbsentMap]
+  );
 
   const submitMutation = useMutation({
     mutationFn: (body: { exam_id: string; marks: Array<Record<string, unknown>> }) =>
       examinationService.submitMarks(schoolCode, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['examinations', 'marks', schoolCode, examIdApi, classId, subjectId] });
+      setAuditNote(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
       showToast('Marks submitted', 'success');
     },
     onError: (err: Error & { response?: { data?: { message?: string } } }) => {
@@ -345,24 +468,76 @@ export default function TeacherMarksEntryScreen() {
     },
   });
 
-  const handleSubmit = useCallback(() => {
-    if (!examIdApi) {
-      showToast('Select an exam', 'error');
-      return;
-    }
-    if (examSubjects.length > 0 && !subjectId) {
-      showToast('Select a subject', 'error');
-      return;
-    }
-    const marks = studentsList
-      .map((s) => ({
-        student_id: s.id,
-        marks: marksMap[s.id] ?? '',
-        grade: (marksMap[s.id] ?? '').trim() || undefined,
-      }))
-      .filter((m) => m.student_id);
-    submitMutation.mutate({ exam_id: examIdApi, marks });
-  }, [examIdApi, examSubjects.length, subjectId, studentsList, marksMap, submitMutation, showToast]);
+  const submitCurrentDraft = useCallback(
+    async (opts: { strict?: boolean } = {}) => {
+      if (!examIdApi) throw new Error('Select exam');
+      if (!subjectId) throw new Error('Select subject');
+      if (!classId) throw new Error('Select class and section');
+      if (studentsList.length === 0) throw new Error('No students found');
+      const marksPayload = studentsList.map((s) => {
+        const isAbsent = Boolean(currentAbsentMap[s.id]);
+        const rawValue = String(currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '').trim();
+        const parsed = Number(rawValue || 0);
+        if (opts.strict && !isAbsent && !rawValue) throw new Error(`Missing marks for ${s.name}`);
+        if (!isAbsent && rawValue && (parsed < 0 || parsed > selectedSubjectMaxMarks)) {
+          throw new Error(`Marks for ${s.name} must be between 0 and ${selectedSubjectMaxMarks}`);
+        }
+        if (opts.strict && !isAbsent && parsed <= 0) throw new Error(`${s.name} must be > 0 or marked absent`);
+        return {
+          student_id: s.id,
+          subject_id: subjectId,
+          class_id: classId,
+          marks: isAbsent ? 0 : rawValue,
+          marks_entry_code: isAbsent ? 'AB' : undefined,
+          grade: !isAbsent && rawValue ? deriveGrade((parsed / selectedSubjectMaxMarks) * 100) : undefined,
+        };
+      });
+      await submitMutation.mutateAsync({ exam_id: examIdApi, marks: marksPayload });
+    },
+    [
+      examIdApi,
+      subjectId,
+      classId,
+      studentsList,
+      currentAbsentMap,
+      currentMarksMap,
+      existingMarksMap,
+      selectedSubjectMaxMarks,
+      submitMutation,
+      deriveGrade,
+    ]
+  );
+
+  const hasUnsavedDraft = useMemo(() => {
+    if (!subjectId) return false;
+    return studentsList.some((s) => {
+      const local = String(currentMarksMap[s.id] ?? '').trim();
+      const remote = String(existingMarksMap[s.id] ?? '').trim();
+      const absent = Boolean(currentAbsentMap[s.id]);
+      return local !== remote || absent;
+    });
+  }, [subjectId, studentsList, currentMarksMap, existingMarksMap, currentAbsentMap]);
+
+  const trySwitchSubject = useCallback(
+    async (nextSubjectId: string) => {
+      if (nextSubjectId === subjectId) return;
+      if (!hasUnsavedDraft) {
+        setSubjectId(nextSubjectId);
+        return;
+      }
+      try {
+        await submitCurrentDraft();
+        setSubjectId(nextSubjectId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Auto-save failed';
+        Alert.alert('Unsaved marks', `${msg}. Continue switching and discard unsaved changes?`, [
+          { text: 'Stay', style: 'cancel' },
+          { text: 'Continue', style: 'destructive', onPress: () => setSubjectId(nextSubjectId) },
+        ]);
+      }
+    },
+    [subjectId, hasUnsavedDraft, submitCurrentDraft]
+  );
 
   const rosterBlocked =
     Boolean(classId && selectedClass) &&
@@ -377,17 +552,32 @@ export default function TeacherMarksEntryScreen() {
     (Boolean(schoolCode && classesList.length > 0) && loadingSchoolClasses);
 
   const showStudentGrid = rosterQueryOk && examId && (examSubjects.length === 0 || subjectId);
+  const completionPct = studentsList.length > 0 ? Math.round((enteredCount / studentsList.length) * 100) : 0;
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={styles.headerBar}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <Text style={[styles.backText, { color: TEACHER_GREEN }]}>← Back</Text>
         </Pressable>
-        <Text style={styles.title}>Marks Entry</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Marks Entry</Text>
+          <Text style={styles.subtitle}>Scholastic</Text>
+        </View>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.label}>Exam</Text>
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <Text style={styles.heroTitle}>Exam Mark Entry</Text>
+            <Text style={styles.progressBadgeText}>{completionPct}%</Text>
+          </View>
+          <Text style={styles.heroSub}>{enteredCount}/{studentsList.length || 0} students updated</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${completionPct}%` }]} />
+          </View>
+        </View>
+
+        <Text style={styles.label}>Step 1: Select Exam</Text>
         {loadingExams && examsList.length === 0 ? (
           <ActivityIndicator size="small" color={TEACHER_GREEN} style={styles.loader} />
         ) : examsList.length === 0 ? (
@@ -399,14 +589,14 @@ export default function TeacherMarksEntryScreen() {
               return (
                 <Pressable
                   key={String(e.id)}
-                  style={[styles.chip, active && { backgroundColor: TEACHER_GREEN }]}
+                  style={[styles.chip, active && styles.chipActive]}
                   onPress={() => {
                     setExamId(String(e.id));
-                    setMarksMap({});
                     const subs = examSubjectsList(e);
                     setSubjectId(subs[0]?.id ?? '');
                   }}
                 >
+                  <Ionicons name="document-text-outline" size={14} color={active ? '#fff' : '#166534'} />
                   <Text style={[styles.chipText, active && { color: '#fff' }]} numberOfLines={2}>
                     {examChipLabel(e)}
                   </Text>
@@ -416,7 +606,29 @@ export default function TeacherMarksEntryScreen() {
           </ScrollView>
         )}
 
-        <Text style={styles.label}>Class</Text>
+        <Text style={styles.label}>Step 2: Select Class</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+          {classChoices.map((name) => {
+            const active = selectedClassName === name;
+            return (
+              <Pressable key={name} style={[styles.chip, active && styles.chipActive]} onPress={() => setSelectedClassName(name)}>
+                <Text style={[styles.chipText, active && { color: '#fff' }]}>{name}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Text style={styles.label}>Step 3: Select Section</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+          {sectionChoices.map((sec) => {
+            const active = selectedSection === sec;
+            return (
+              <Pressable key={sec} style={[styles.chip, active && styles.chipActive]} onPress={() => setSelectedSection(sec)}>
+                <Text style={[styles.chipText, active && { color: '#fff' }]}>{sec}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Text style={styles.label}>Class Mapping</Text>
         {loadingClasses && classesList.length === 0 ? (
           <ActivityIndicator size="small" color={TEACHER_GREEN} style={styles.loader} />
         ) : (
@@ -426,12 +638,16 @@ export default function TeacherMarksEntryScreen() {
               return (
                 <Pressable
                   key={String(c.id)}
-                  style={[styles.chip, active && { backgroundColor: TEACHER_GREEN }]}
+                  style={[styles.chip, active && styles.chipActive]}
                   onPress={() => {
                     setClassId(String(c.id));
-                    setMarksMap({});
+                    const className =
+                      str((c as { class_name?: string }).class_name) || str((c as { class?: string }).class) || str(c.name);
+                    if (className) setSelectedClassName(className);
+                    if (str(c.section)) setSelectedSection(str(c.section));
                   }}
                 >
+                  <Ionicons name="school-outline" size={14} color={active ? '#fff' : '#166534'} />
                   <Text style={[styles.chipText, active && { color: '#fff' }]} numberOfLines={2}>
                     {classPillLabel(c)}
                   </Text>
@@ -443,21 +659,20 @@ export default function TeacherMarksEntryScreen() {
 
         {examSubjects.length > 1 ? (
           <>
-            <Text style={styles.label}>Subject</Text>
+            <Text style={styles.label}>Step 4: Select Subject</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
               {examSubjects.map((s) => {
                 const active = subjectId === s.id;
+                const maxForChip = subjectMetaMap[s.id]?.maxMarks ?? 100;
                 return (
                   <Pressable
                     key={s.id}
-                    style={[styles.chip, active && { backgroundColor: TEACHER_GREEN }]}
-                    onPress={() => {
-                      setSubjectId(s.id);
-                      setMarksMap({});
-                    }}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => void trySwitchSubject(s.id)}
                   >
+                    <Ionicons name="book-outline" size={14} color={active ? '#fff' : '#166534'} />
                     <Text style={[styles.chipText, active && { color: '#fff' }]} numberOfLines={2}>
-                      {s.name}
+                      {s.name} · Max {maxForChip}
                     </Text>
                   </Pressable>
                 );
@@ -474,27 +689,123 @@ export default function TeacherMarksEntryScreen() {
           </Text>
         ) : showStudentGrid && studentsList.length > 0 ? (
           <>
-            {studentsList.map((s) => (
-              <View key={s.id} style={styles.row}>
-                <Text style={styles.rowName} numberOfLines={1}>
-                  {s.name}
-                </Text>
-                <TextInput
-                  style={styles.marksInput}
-                  value={marksMap[s.id] ?? existingMarksMap[s.id] ?? ''}
-                  onChangeText={(t) => setMarksMap((p) => ({ ...p, [s.id]: t }))}
-                  placeholder="Marks"
-                  keyboardType="numeric"
-                />
+            <View style={styles.maxBar}>
+              <Text style={styles.maxBarText}>Max Marks: {selectedSubjectMaxMarks}</Text>
+              <Text style={styles.maxBarText}>Pass: 40%</Text>
+            </View>
+            {studentsList.map((s, idx) => (
+              <View key={s.id} style={styles.rowCard}>
+                <View style={styles.rowHead}>
+                  <Text style={styles.rowIndex}>{idx + 1}</Text>
+                  <Text style={styles.rowName} numberOfLines={1}>
+                    {s.name}
+                  </Text>
+                  <View
+                    style={[
+                      styles.tag,
+                      String((currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '')).trim() || currentAbsentMap[s.id]
+                        ? styles.tagDone
+                        : styles.tagPending,
+                    ]}
+                  >
+                    <Text style={styles.tagText}>
+                      {currentAbsentMap[s.id]
+                        ? 'Absent'
+                        : String((currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '')).trim()
+                          ? 'Draft'
+                          : 'Pending'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.entryRow}>
+                  <TextInput
+                    style={styles.marksInput}
+                    value={currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? ''}
+                    onChangeText={(t) => {
+                      const clean = t.replace(/[^0-9.]/g, '');
+                      setDraftMarksBySubject((prev) => ({
+                        ...prev,
+                        [subjectId]: { ...(prev[subjectId] ?? {}), [s.id]: clean },
+                      }));
+                      if (Number(clean || 0) > 0) {
+                        setAbsentBySubject((prev) => ({
+                          ...prev,
+                          [subjectId]: { ...(prev[subjectId] ?? {}), [s.id]: false },
+                        }));
+                      }
+                    }}
+                    onBlur={() => {
+                      const value = Number(String(currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '').trim() || 0);
+                      if (!currentAbsentMap[s.id] && value > selectedSubjectMaxMarks) {
+                        showToast(`Max for this subject is ${selectedSubjectMaxMarks}`, 'error');
+                      }
+                    }}
+                    placeholder="Marks"
+                    keyboardType="numeric"
+                  />
+                  <Pressable
+                    style={[styles.absentBtn, currentAbsentMap[s.id] && styles.absentBtnActive]}
+                    onPress={() => {
+                      const next = !currentAbsentMap[s.id];
+                      setAbsentBySubject((prev) => ({
+                        ...prev,
+                        [subjectId]: { ...(prev[subjectId] ?? {}), [s.id]: next },
+                      }));
+                      if (next) {
+                        setDraftMarksBySubject((prev) => ({
+                          ...prev,
+                          [subjectId]: { ...(prev[subjectId] ?? {}), [s.id]: '0' },
+                        }));
+                      }
+                    }}
+                  >
+                    <Text style={[styles.absentBtnText, currentAbsentMap[s.id] && { color: '#fff' }]}>Absent</Text>
+                  </Pressable>
+                </View>
+                {(() => {
+                  const raw = Number(String(currentMarksMap[s.id] ?? existingMarksMap[s.id] ?? '').trim() || 0);
+                  if (currentAbsentMap[s.id]) return <Text style={styles.calcText}>0 / {selectedSubjectMaxMarks} · 0.00% · F</Text>;
+                  if (!Number.isFinite(raw) || raw < 0) return <Text style={styles.calcText}>--</Text>;
+                  const pct = selectedSubjectMaxMarks > 0 ? (raw / selectedSubjectMaxMarks) * 100 : 0;
+                  return (
+                    <Text style={styles.calcText}>
+                      {raw}/{selectedSubjectMaxMarks} · {pct.toFixed(2)}% · {deriveGrade(pct)}
+                    </Text>
+                  );
+                })()}
               </View>
             ))}
-            <Pressable
-              style={[styles.submitBtn, { backgroundColor: TEACHER_GREEN }]}
-              onPress={handleSubmit}
-              disabled={submitMutation.isPending}
-            >
-              <Text style={styles.submitText}>Submit marks</Text>
-            </Pressable>
+            <Text style={styles.progressText}>
+              Entered for {enteredCount}/{studentsList.length} students
+            </Text>
+            <View style={styles.actionRow}>
+              <Pressable
+                style={[styles.saveBtn, submitMutation.isPending && styles.btnDisabled]}
+                onPress={() =>
+                  void submitCurrentDraft().catch((e) => showToast(e instanceof Error ? e.message : 'Save failed', 'error'))
+                }
+                disabled={submitMutation.isPending}
+              >
+                <Text style={styles.saveText}>Save Draft</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.submitBtn, submitMutation.isPending && styles.btnDisabled]}
+                onPress={() =>
+                  void submitCurrentDraft({ strict: true }).catch((e) =>
+                    showToast(e instanceof Error ? e.message : 'Submit failed', 'error')
+                  )
+                }
+                disabled={submitMutation.isPending}
+              >
+                <Text style={styles.submitText}>Finalize & Submit</Text>
+              </Pressable>
+            </View>
+            {auditNote ? (
+              <View style={styles.auditSnack}>
+                <Ionicons name="checkmark-circle" size={14} color="#14532D" />
+                <Text style={styles.auditText}>Audit: {auditNote}</Text>
+              </View>
+            ) : null}
           </>
         ) : (
           <Text style={styles.hint}>
@@ -512,7 +823,7 @@ export default function TeacherMarksEntryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F0FDF4' },
-  header: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
@@ -525,37 +836,128 @@ const styles = StyleSheet.create({
   backBtn: { padding: spacing[2], marginRight: spacing[2], minHeight: 44, justifyContent: 'center' },
   backText: { fontSize: 16, fontWeight: '600' },
   title: { ...textStyles.h4, color: '#111827', flex: 1 },
+  subtitle: { ...textStyles.caption, color: '#64748B' },
   scroll: { flex: 1 },
   content: { padding: spacing[4], paddingBottom: spacing[8] },
+  heroCard: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 14,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[3] },
+  heroTitle: { ...textStyles.h4, color: '#14532D' },
+  heroSub: { ...textStyles.bodySm, color: '#166534' },
+  progressBadgeText: { ...textStyles.caption, color: '#14532D', fontWeight: '700' },
+  progressTrack: { height: 8, borderRadius: 999, backgroundColor: '#DCFCE7', overflow: 'hidden' },
+  progressFill: { height: 8, backgroundColor: '#16A34A' },
   label: { ...textStyles.bodySm, color: '#6B7280', marginBottom: spacing[2] },
   chipRow: { marginBottom: spacing[4] },
   chip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: 8,
-    marginRight: spacing[2],
-    backgroundColor: '#E5E7EB',
-    maxWidth: 220,
-  },
-  chipText: { ...textStyles.body, color: '#374151' },
-  loader: { marginVertical: spacing[4] },
-  row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderRadius: 10,
+    marginRight: spacing[2],
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    maxWidth: 220,
   },
-  rowName: { ...textStyles.body, color: '#111827', flex: 1 },
+  chipActive: { backgroundColor: TEACHER_GREEN, borderColor: TEACHER_GREEN },
+  chipText: { ...textStyles.body, color: '#374151' },
+  loader: { marginVertical: spacing[4] },
+  rowCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    padding: spacing[3],
+    marginBottom: spacing[2],
+  },
+  rowHead: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[2] },
+  rowIndex: {
+    ...textStyles.caption,
+    color: '#166534',
+    width: 22,
+    height: 22,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    backgroundColor: '#DCFCE7',
+    borderRadius: 11,
+    overflow: 'hidden',
+    marginRight: spacing[2],
+  },
+  rowName: { ...textStyles.body, color: '#111827', flex: 1, fontWeight: '600' },
+  tag: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  tagDone: { backgroundColor: '#DCFCE7' },
+  tagPending: { backgroundColor: '#F3F4F6' },
+  tagText: { ...textStyles.caption, color: '#166534' },
   marksInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#86EFAC',
     borderRadius: 8,
     padding: spacing[2],
-    width: 80,
+    width: '100%',
     ...textStyles.body,
+    backgroundColor: '#F8FFFA',
+    flex: 1,
   },
-  submitBtn: { marginTop: spacing[6], padding: spacing[4], borderRadius: 12, alignItems: 'center' },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  absentBtn: {
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FFF1F2',
+    borderRadius: 8,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  absentBtnActive: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
+  absentBtnText: { ...textStyles.bodySm, color: '#B91C1C', fontWeight: '600' },
+  maxBar: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 10,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    marginBottom: spacing[2],
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  maxBarText: { ...textStyles.bodySm, color: '#166534', fontWeight: '600' },
+  calcText: { ...textStyles.caption, color: '#64748B', marginTop: spacing[1] },
+  actionRow: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[4] },
+  saveBtn: {
+    flex: 1,
+    padding: spacing[3],
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  saveText: { ...textStyles.button, color: '#166534' },
+  submitBtn: { flex: 1, padding: spacing[3], borderRadius: 12, alignItems: 'center', backgroundColor: TEACHER_GREEN },
+  btnDisabled: { opacity: 0.6 },
+  progressText: { ...textStyles.bodySm, color: '#64748B', marginTop: spacing[3] },
   submitText: { ...textStyles.button, color: '#fff' },
+  auditSnack: {
+    marginTop: spacing[3],
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 10,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  auditText: { ...textStyles.bodySm, color: '#14532D' },
   hint: { ...textStyles.body, color: '#6B7280' },
 });

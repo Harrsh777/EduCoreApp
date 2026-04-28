@@ -1,4 +1,4 @@
-import { AppCard, SectionHeader } from '@/components/ui';
+import { SectionHeader } from '@/components/ui';
 import { useSession } from '@/hooks/useSession';
 import { useTheme } from '@/hooks/useTheme';
 import { studentService } from '@/services/student.service';
@@ -61,23 +61,44 @@ export default function StudentTransportScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: c.background.default }]}>
       <SectionHeader title="My transport" />
-      <AppCard style={{ margin: spacing[4] }}>
+      <View
+        style={[
+          styles.sectionCard,
+          {
+            margin: spacing[4],
+            borderColor: c.border.default,
+            backgroundColor: c.surface.default,
+          },
+        ]}
+      >
         <Text style={[styles.label, { color: c.text.secondary }]}>Route</Text>
         <Text style={[styles.value, { color: c.text.primary }]}>{String(t.route_name ?? t.route ?? '—')}</Text>
+        <View style={[styles.rowDivider, { borderBottomColor: c.border.muted ?? c.border.default }]} />
         <Text style={[styles.label, { color: c.text.secondary }]}>Stop</Text>
         <Text style={[styles.value, { color: c.text.primary }]}>{String(t.stop_name ?? t.stop ?? '—')}</Text>
+        <View style={[styles.rowDivider, { borderBottomColor: c.border.muted ?? c.border.default }]} />
         <Text style={[styles.label, { color: c.text.secondary }]}>Vehicle</Text>
         <Text style={[styles.value, { color: c.text.primary }]}>{String(t.vehicle_number ?? t.vehicle ?? '—')}</Text>
-      </AppCard>
+      </View>
       <SectionHeader title="Route maps" />
       <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[8] }}>
         {routes.map((r: { id: string; name?: string; vehicle_id?: string }) => {
           const routeStops = stopsByRouteId[r.id] ?? [];
           const sorted = [...routeStops].sort((a, b) => (Number((a as { order?: number }).order) || 0) - (Number((b as { order?: number }).order) || 0));
           return (
-            <AppCard key={r.id} style={{ marginBottom: spacing[2] }}>
+            <View
+              key={r.id}
+              style={[
+                styles.sectionCard,
+                {
+                  marginBottom: spacing[2],
+                  borderColor: c.border.default,
+                  backgroundColor: c.surface.default,
+                },
+              ]}
+            >
               <Text style={[styles.cardTitle, { color: c.text.primary }]}>{r.name ?? r.id}</Text>
               <Text style={[styles.cardSubtitle, { color: c.text.secondary }]}>Vehicle ID: {r.vehicle_id ?? '—'}</Text>
               {sorted.length > 0 ? (
@@ -85,7 +106,7 @@ export default function StudentTransportScreen() {
                   {sorted.map((s: { name?: string; id: string }) => s.name ?? s.id).join(' → ')}
                 </Text>
               ) : null}
-            </AppCard>
+            </View>
           );
         })}
       </View>
@@ -95,9 +116,19 @@ export default function StudentTransportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  label: { fontSize: 14, marginTop: 8 },
-  value: { fontSize: 18, fontWeight: '600', marginTop: 4 },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  label: { fontSize: 13, marginTop: 2, fontWeight: '500' },
+  value: { fontSize: 17, fontWeight: '600', marginTop: 4 },
+  rowDivider: {
+    borderBottomWidth: 1,
+    marginVertical: 10,
+  },
   cardTitle: { fontSize: 16, fontWeight: '600' },
-  cardSubtitle: { fontSize: 14, marginTop: 2 },
-  stopsLine: { fontSize: 12, marginTop: 6 },
+  cardSubtitle: { fontSize: 13, marginTop: 4 },
+  stopsLine: { fontSize: 12, marginTop: 8, lineHeight: 18 },
 });

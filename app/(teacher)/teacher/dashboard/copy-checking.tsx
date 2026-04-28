@@ -33,6 +33,8 @@ type Slot = {
   class_id?: string;
   start_time?: string;
   end_time?: string;
+  copy_checked?: boolean;
+  status?: string;
 };
 
 function unwrapSlotsBody(raw: unknown): Slot[] {
@@ -93,6 +95,14 @@ export default function TeacherCopyCheckingScreen() {
     });
     return map;
   }, [slots]);
+  const progress = useMemo(() => {
+    const checked = slots.filter((slot) => {
+      if (typeof slot.copy_checked === 'boolean') return slot.copy_checked;
+      return String(slot.status ?? '').toLowerCase() === 'checked';
+    }).length;
+    const pending = Math.max(slots.length - checked, 0);
+    return { checked, pending, total: slots.length };
+  }, [slots]);
 
   const isLoading = classesLoading || slotsLoading;
 
@@ -113,6 +123,26 @@ export default function TeacherCopyCheckingScreen() {
               ))}
             </View>
           )}
+        </Card>
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Completion tracker</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Pending</Text>
+              <Text style={styles.metricPending}>{progress.pending}</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Checked</Text>
+              <Text style={styles.metricChecked}>{progress.checked}</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Total</Text>
+              <Text style={styles.metricTotal}>{progress.total}</Text>
+            </View>
+          </View>
+          <Text style={styles.timelineHint}>
+            Timeline below shows class-subject slots day-wise for rapid copy-checking follow-up.
+          </Text>
         </Card>
 
         <Text style={styles.sectionTitle}>Timetable by day</Text>
@@ -154,6 +184,13 @@ const styles = StyleSheet.create({
   classRow: { flexDirection: 'row', flexWrap: 'wrap', gap: s.sm },
   classPill: { backgroundColor: colors.primaryLight, paddingHorizontal: s.md, paddingVertical: s.xs, borderRadius: 9999 },
   classPillText: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
+  metricsRow: { flexDirection: 'row', gap: s.sm },
+  metricCard: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 10, padding: s.md, borderWidth: 1, borderColor: colors.border },
+  metricLabel: { ...textStyles.caption, color: colors.textMuted, marginBottom: 2 },
+  metricPending: { ...textStyles.body, color: '#B45309', fontWeight: '700' },
+  metricChecked: { ...textStyles.body, color: colors.primaryDark, fontWeight: '700' },
+  metricTotal: { ...textStyles.body, color: colors.textPrimary, fontWeight: '700' },
+  timelineHint: { ...textStyles.caption, color: colors.textMuted, marginTop: s.md },
   dayCard: { marginBottom: s.lg },
   dayTitle: { ...textStyles.body, fontWeight: '700', color: colors.textPrimary, marginBottom: s.md },
   slotRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: s.sm, borderBottomWidth: 1, borderBottomColor: colors.border },

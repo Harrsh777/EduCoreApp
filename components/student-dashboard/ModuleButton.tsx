@@ -8,6 +8,8 @@ import { getStudentModulePalette, studentDashboardTheme, studentDashboardCardSty
 import { spacing } from '@/theme/spacing';
 
 const { colors, cardRadiusLg, minTouchHeight } = studentDashboardTheme;
+const MODULE_ICON_SIZE = 22;
+const MODULE_ICON_CIRCLE_SIZE = 44;
 
 type ModuleButtonProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -26,9 +28,9 @@ export function ModuleButton({ icon, label, onPress }: ModuleButtonProps) {
       accessibilityLabel={label}
     >
       <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={24} color={iconColor} />
+        <Ionicons name={icon} size={MODULE_ICON_SIZE} color={iconColor} />
       </View>
-      <Text style={styles.label} numberOfLines={2}>
+      <Text style={styles.label} numberOfLines={2} ellipsizeMode="tail">
         {label}
       </Text>
     </Pressable>
@@ -38,10 +40,14 @@ export function ModuleButton({ icon, label, onPress }: ModuleButtonProps) {
 const styles = StyleSheet.create({
   wrap: {
     ...studentDashboardCardStyle,
+    width: '100%',
     minHeight: minTouchHeight + 36,
+    height: minTouchHeight + 36,
+    flexDirection: 'column',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
+    paddingHorizontal: spacing[3],
     borderRadius: cardRadiusLg,
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -51,16 +57,16 @@ const styles = StyleSheet.create({
     opacity: 0.96,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: MODULE_ICON_CIRCLE_SIZE,
+    height: MODULE_ICON_CIRCLE_SIZE,
+    borderRadius: MODULE_ICON_CIRCLE_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[2],
   },
   label: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '600',
     color: colors.textPrimary,
     textAlign: 'center',
